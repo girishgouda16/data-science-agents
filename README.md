@@ -31,6 +31,40 @@ Data Science Agents puts that data scientist behind a chat box: ten
 agents that take you from a raw table to a monitored model in production.
 Bring a problem. Get a model you can defend.
 
+## Why this one
+
+Other AI data scientists chase the highest score. This one refuses to ship
+a model it cannot defend.
+
+- **Judgment before score.** It asks what only the business knows: what the
+  model is for, the success bar, how many alerts the team can review, where
+  the labels came from. Everything a measurement can settle, it decides.
+- **Gates that block, not warnings that scroll past.** Leakage, losing to
+  the baseline, an unstable split: a failed gate stops export and promotion.
+  Only a person can override it, and the reason is recorded.
+- **All the way to production, on the record.** Raw table, features, model,
+  registry, champion, serving, drift. Every assumption, question and
+  override lands in the report.
+
+LLM agents made building models cheap. Cheap models ship with leakage and
+no baseline. The hard part now is trusting them, and that is what this
+platform is for: teams that must explain a model to a manager, an auditor
+or a regulator.
+
+### How it compares
+
+| | Agents that optimise a metric (AIDE, RD-Agent) | Chat-with-data tools (PandasAI, TaskWeaver) | AutoML (AutoGluon) | **Data Science Agents** |
+| --- | :-: | :-: | :-: | :-: |
+| Asks what the model is for | – | – | – | **yes** |
+| Splits by customer and time, screens for leakage | partly | – | partly | **yes** |
+| Blocks a model that fails a gate | – | – | – | **yes** |
+| Registry, serving and drift | – | – | – | **yes** |
+| Several users, each with their own runs | – | – | – | **yes** |
+| Runs audited tools, not free-form generated code | – | – | yes | **yes** |
+
+Built openly: read every tool, run it on your own machines with any LLM,
+and use the same tools from Claude Code or any MCP client.
+
 ## Before / after
 
 You ask for a churn model.
@@ -99,6 +133,24 @@ Measured offline, in CI, on data with known answers:
 
 Around them: **gateway + UI** on :9001, **MLflow** on :5001, and in Docker
 **Keycloak** sign-in on :8180 and **Langfuse** traces on :3000.
+
+### Why ten agents, not one
+
+Each task is its own discipline. A churn classifier, a traffic forecast
+and a drift check need different splits, baselines, metrics and gates.
+One agent holding all of it would carry over 150 tools and every playbook
+in one prompt, and it would pick the wrong one.
+
+- **Focused context.** Each specialist loads only its own tools and
+  playbook (`SKILL.md` + `skills/`), so the LLM chooses well.
+- **Its own rules.** Forecasting backtests at your horizon; anomaly sizes
+  the alert queue to your review capacity; clustering proves segments are
+  stable. Each agent's gates encode its discipline.
+- **Handoffs like a real team.** The orchestrator routes requests and
+  relays questions. Trainers hand finished models to the registry; serving,
+  explain and drift pick them up from there.
+- **Independent services.** Each agent is its own A2A server with its own
+  dependencies: scale, restart or replace one without touching the others.
 
 ## How it works
 
