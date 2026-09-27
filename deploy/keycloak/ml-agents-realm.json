@@ -1,0 +1,50 @@
+{
+  "realm": "ml-agents",
+  "displayName": "Holdout",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 28800,
+  "ssoSessionMaxLifespan": 86400,
+  "roles": {
+    "realm": [
+      { "name": "ml-user", "description": "Uses the ML agents: chats, uploads, trains, promotes own models" },
+      { "name": "ml-admin", "description": "Acts on any user's runs and models (break-glass)" }
+    ]
+  },
+  "defaultRoles": ["ml-user"],
+  "clients": [
+    {
+      "clientId": "ml-agents-ui",
+      "name": "Holdout web UI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${ML_AGENTS_UI_URL:http://localhost:9001}/*", "http://localhost:5173/*"],
+      "webOrigins": ["${ML_AGENTS_UI_URL:http://localhost:9001}", "http://localhost:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${ML_AGENTS_UI_URL:http://localhost:9001}/*##http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience: ml-agents",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "ml-agents",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ]
+}

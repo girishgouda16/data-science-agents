@@ -1,0 +1,101 @@
+"""A2A server for the forecasting agent — senior-data-scientist agent for time-series forecasting across domains (retail demand, logistics volumes, ops/infra metrics).
+
+The model/tool loop, human-in-the-loop pauses, durable (LangGraph-checkpointed)
+conversation state and the A2A server itself live in core/agent_host.py; this
+file is only what makes this agent itself.
+
+Auth: callers send `Authorization: Bearer <FORECASTING_AGENT_API_KEY>`.
+Run: python agent.py  (serves on http://localhost:9600)
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for core.*
+from core import runtime  # noqa: E402,F401
+from core.agent_host import (
+    Agent,
+    Host,
+    build_app,
+    discover_skills,
+    litellm,
+    resolve_model,
+    run_footer,
+    serve,
+)  # noqa: E402,F401
+
+HOME = Path(__file__).resolve().parents[1]
+SCRIPTS_DIR = HOME / "scripts"
+MCP_SERVER_ARGS = ["-m", "mcp_server.server"]
+
+# Which skill gates each MCP tool — a call is refused until its skill is
+# loaded. Keep in sync with mcp_server/'s @mcp.tool() functions
+# (test_skill_gating.py checks it).
+TOOL_TO_SKILL = {
+    "record_business_context": "business-understanding",
+    "detect_data_leakage": "diagnostics",
+    "acknowledge_identifier_column": "diagnostics",
+    "acknowledge_gate": "diagnostics",
+    "check_readiness": "diagnostics",
+    "train_baseline": "diagnostics",
+    "generate_report": "reporting",
+    "log_run_to_mlflow": "mlops",
+    "list_model_versions": "mlops",
+    "compare_model_versions": "mlops",
+    "promote_model": "mlops",
+    "demote_model": "mlops",
+    "eda": "eda",
+    "prepare_dataset": "eda",
+    "list_data_sources": "eda",
+    "load_dataset": "eda",
+    "detect_outliers": "eda",
+    "propose_imputation": "preprocessing",
+    "apply_imputation": "preprocessing",
+    "propose_drop_columns": "preprocessing",
+    "apply_drop_columns": "preprocessing",
+    "train_model": "forecasting",
+    "tune_hyperparams": "forecasting",
+    "compare_models": "forecasting",
+    "compare_runs": "forecasting",
+    "explain_model": "forecasting",
+    "export_model": "forecasting",
+    "predict": "forecasting",
+}
+
+SPEC = Agent(
+    name="forecasting",
+    port=9600,
+    home=HOME,
+    card={
+        "name": "Forecasting Agent",
+        "description": "Senior-data-scientist agent for time-series forecasting across domains (retail demand, logistics volumes, ops/infra metrics). Confirms with the human before imputing, dropping data, or picking a final model.",
+        "version": "0.2.0",
+        "skill_id": "time_series_forecasting",
+        "skill_name": "Time-Series Forecasting",
+        "skill_description": "Interactive EDA, imputation, model comparison (naive baseline, exponential smoothing, lag-feature XGBoost), walk-forward backtesting, explainability, and multi-step forecasting for any time-indexed metric — asks before any data-changing step.",
+        "tags": [
+            "forecasting",
+            "time-series",
+            "ml",
+            "data-science",
+            "human-in-the-loop",
+        ],
+        "examples": [
+            "Forecast next month's demand in sales.csv",
+            "Predict daily traffic for the next 14 days from traffic.csv",
+        ],
+    },
+    tool_to_skill=TOOL_TO_SKILL,
+    ask_user="Pause and ask the human a question before applying a data-changing step (imputation, dropping columns, model choice). Always include a 'go with your recommendation' option.",
+    load_skill="Load one phase's detailed playbook (business-understanding, eda, preprocessing, forecasting, diagnostics) before using its tools for the first time this conversation. Its tools are unusable until this is called.",
+    max_rounds=30,
+    footer=run_footer,
+)
+
+SKILLS = discover_skills(HOME / "skills")
+_resolve_model = resolve_model
+HOST = Host(SPEC)
+app = build_app(SPEC, HOST)
+
+if __name__ == "__main__":
+    serve(SPEC, app)

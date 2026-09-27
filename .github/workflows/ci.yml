@@ -1,0 +1,120 @@
+name: agentic-ml CI
+
+# Every agent, EDA to MLOps: the five training agents (classification,
+# regression, clustering, anomaly, forecasting), everything they hand work to
+# (visualization -> MLflow registry -> serving / explain / drift), and the
+# orchestrator and gateway that route between them. No LLM is called: every
+# suite drives the tools directly. test_production_wangiri.py (3.5M rows,
+# ~10 min, data not in git) and eval_agent.py (live LLM, costs money) are run
+# by hand — see classification-agent/SKILL.md.
+
+on:
+  push:          # any branch: `quick` only (~1 min)
+  pull_request:  # `quick`, then the full `test` suite
+
+# A newer push to the same branch/PR cancels the older, now-stale run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Needs no pip install, so it finishes in about a minute.
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Every .py file parses
+        run: python -m compileall -q -x 'node_modules|/dist/|mlruns' .
+      - name: Gate engine (stdlib only)
+        working-directory: core
+        run: python test_gates.py
+      - name: UI lint + tests
+        working-directory: ui
+        run: npm ci && npm run lint && npm test
+
+  test:
+    needs: quick
+    # Full suite on PRs and main only; a plain branch push stops at `quick`.
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Tests write runs/artifacts/predictions and MLflow runs here, never
+      # into the repo's data/ or mlruns/.
+      AGENTIC_ML_DATA_DIR: /tmp/agentic-ml-data
+      MLFLOW_TRACKING_URI: file:/tmp/agentic-ml-mlruns
+      LLM_PROVIDER: ollama
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt \
+            -r classification-agent/requirements.txt -r visualization-agent/requirements.txt \
+            -r serving-agent/requirements.txt -r explain-agent/requirements.txt \
+            -r drift-agent/requirements.txt -r orchestrator-agent/requirements.txt \
+            -r regression-agent/requirements.txt -r clustering-agent/requirements.txt \
+            -r anomaly-agent/requirements.txt -r forecasting-agent/requirements.txt
+
+      - name: Migrate the database
+        # Tests assert on data/training_runs.db; a fresh checkout has no tables.
+        run: alembic upgrade head
+
+      - name: Classification agent
+        working-directory: classification-agent/scripts
+        run: |
+          python test_gates.py
+          python test_mcp_server.py
+          python test_positive_class.py
+          python test_split_integrity.py
+          python test_data_sources.py
+          python test_registry_readiness.py
+          python -m pytest -q test_skill_gating.py test_agent_tool_loop.py test_model_resolution.py
+
+      - name: Regression, clustering, anomaly, forecasting agents
+        run: |
+          (cd regression-agent/scripts && python test_mcp_server.py && python test_gates.py && python test_split_integrity.py)
+          (cd clustering-agent/scripts && python test_mcp_server.py && python test_segmentation_rigor.py)
+          (cd anomaly-agent/scripts && python test_mcp_server.py && python test_detection_rigor.py)
+          (cd forecasting-agent/scripts && python test_mcp_server.py && python test_forecast_rigor.py)
+          for a in regression clustering anomaly forecasting visualization serving drift; do
+            (cd $a-agent/scripts && python -m pytest -q test_skill_gating.py)
+          done
+
+      - name: Registry, gates, tracing
+        working-directory: core
+        run: |
+          python test_registry.py
+          python test_gates.py
+          python test_tracing.py
+
+      - name: Downstream agents
+        run: |
+          (cd visualization-agent/scripts && python test_mcp_server.py)
+          (cd serving-agent/scripts && python test_mcp_server.py)
+          (cd drift-agent/scripts && python test_mcp_server.py && python test_drift_rigor.py)
+          (cd explain-agent/scripts && python test_explain.py)
+
+      - name: Orchestrator and gateway
+        run: |
+          (cd orchestrator-agent && python -m pytest -q)
+          (cd gateway && python -m pytest -q test_gateway.py)
+
+      - name: Cross-agent handoffs
+        run: |
+          python -m pytest -q scripts/test_swarm_e2e.py
+          # Each server started the way its agent.py starts it must serve every tool it defines.
+          python -m pytest -q scripts/test_mcp_servers_serve_every_tool.py
+          # Every non-classification agent, senior workflow through MLflow champion to serving.
+          python -m pytest -q scripts/test_mlops_all_agents.py
+          # Every class an exporter can pickle is importable where its models are loaded.
+          python -m pytest -q scripts/test_pickle_classes_in_sync.py
+          python -m pytest -q scripts/test_multi_user.py scripts/test_tool_boundary.py

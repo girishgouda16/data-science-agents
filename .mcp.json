@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "classification": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" classification"]
+    },
+    "regression": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" regression"]
+    },
+    "clustering": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" clustering"]
+    },
+    "anomaly": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" anomaly"]
+    },
+    "forecasting": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" forecasting"]
+    },
+    "visualization": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" visualization"]
+    },
+    "drift": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" drift"]
+    },
+    "serving": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" serving"]
+    },
+    "explain": {
+      "command": "sh",
+      "args": ["-c", "exec sh \"$(git rev-parse --show-toplevel)/scripts/mcp.sh\" explain"]
+    }
+  }
+}

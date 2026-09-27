@@ -1,0 +1,871 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic ML Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f8fafc;
+    --sidebar-bg: #f1f5f9;
+    --panel: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+    --accent: #4f46e5;
+    --accent-fg: #ffffff;
+    --user-bubble: #eef2ff;
+    --user-fg: #1e1b4b;
+    --error-bubble: #fef2f2;
+    --error-fg: #b91c1c;
+    --pending: #94a3b8;
+    --active-item: #e0e7ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1120;
+      --sidebar-bg: #0a0e1a;
+      --panel: #111827;
+      --border: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #818cf8;
+      --accent-fg: #0b1120;
+      --user-bubble: #1e1b4b;
+      --user-fg: #e0e7ff;
+      --error-bubble: #450a0a;
+      --error-fg: #fca5a5;
+      --pending: #64748b;
+      --active-item: #1e2542;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────── */
+  #sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transition: margin-left .2s ease;
+  }
+  #sidebarHeader { padding: .9rem .8rem .6rem; }
+  #newChatBtn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: .55rem .7rem;
+    font-size: .85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .1s ease;
+  }
+  #newChatBtn:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  #newChatBtn:active { transform: scale(.98); }
+
+  #sessionList { flex: 1; overflow-y: auto; padding: .3rem .6rem; }
+  .session-item {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .5rem .6rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .82rem;
+    color: var(--text);
+    margin-bottom: .1rem;
+    transition: background .12s ease;
+  }
+  .session-item:hover { background: var(--active-item); }
+  .session-item.active { background: var(--active-item); font-weight: 600; }
+  .session-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .session-delete {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .8rem;
+    padding: 0 .2rem;
+    line-height: 1;
+    visibility: hidden;
+  }
+  .session-item:hover .session-delete { visibility: visible; }
+  .session-delete:hover { color: var(--error-fg); }
+
+  #sidebarFooter {
+    padding: .6rem .8rem .9rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+  }
+  #sidebarFooter label {
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+  }
+  select, input[type="text"], input:not([type]) {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .4rem .55rem;
+    font-size: .8rem;
+    width: 100%;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+
+  /* ── Main column ─────────────────────────────────────────────────── */
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .8rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #sidebarToggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 .2rem;
+  }
+  #sessionTitle { font-size: .92rem; font-weight: 600; margin-right: auto; }
+  #statusBar { font-size: .75rem; color: var(--muted); display: flex; align-items: center; }
+  .dot {
+    display: inline-block;
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: #3ab54a;
+    margin-right: .4rem;
+  }
+  .dot.waiting { background: #e0a30c; }
+
+  #logWrap { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+  #log {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 1.2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 100%;
+  }
+  #log:empty::before {
+    content: "Ask it to run EDA, check class balance, train a model, plot a chart, or anything else on a CSV path.";
+    color: var(--muted);
+    font-size: .9rem;
+    margin: auto;
+    text-align: center;
+    display: block;
+  }
+  .row { display: flex; animation: rowIn .28s ease both; }
+  .row.user { justify-content: flex-end; }
+  .row.agent, .row.error { justify-content: flex-start; }
+
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .bubble {
+    max-width: 82%;
+    word-wrap: break-word;
+    font-size: .95rem;
+    line-height: 1.6;
+  }
+  /* User/error bubbles are set via textContent (raw text, not HTML) — they
+     need pre-wrap to preserve typed/manual line breaks. Agent bubbles are
+     marked.parse() HTML via innerHTML instead: pre-wrap there would render
+     the newlines marked's own pretty-printed HTML has BETWEEN tags (e.g.
+     between </li> and <li>) as literal blank lines, on top of every
+     element's own margin — that's what actually caused the huge gaps
+     between list items, not the list/margin rules below. */
+  .row.user .bubble, .row.error .bubble { white-space: pre-wrap; }
+  .row.user .bubble { background: var(--user-bubble); color: var(--user-fg); border-radius: 14px; padding: .55rem .8rem; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  /* Agent replies read as plain text, not a bubble — matches how Claude
+     renders its own responses (full-width prose, not a chat "balloon"). */
+  .row.agent .bubble { color: var(--text); width: 100%; }
+  .row.error .bubble { background: var(--error-bubble); color: var(--error-fg); border-radius: 14px; padding: .55rem .8rem; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .bubble.pending { color: var(--pending); font-style: italic; animation: pulse 1.4s ease-in-out infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: .6; }
+    50% { opacity: 1; }
+  }
+
+  .bubble img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); margin: .3em 0; }
+  .bubble > :first-child { margin-top: 0; }
+  .bubble > :last-child { margin-bottom: 0; }
+  .bubble h1 { font-size: 1.25em; font-weight: 700; margin: .9em 0 .4em; }
+  .bubble h2 { font-size: 1.14em; font-weight: 700; margin: .9em 0 .4em; }
+  .bubble h3 { font-size: 1.04em; font-weight: 700; margin: .9em 0 .35em; }
+  .bubble ul, .bubble ol { margin: .3em 0; padding-left: 1.3em; }
+  .bubble li { margin: .2em 0; }
+  .bubble li > ul, .bubble li > ol { margin: .2em 0; }
+  /* marked wraps <li> content in <p> when the source list is "loose" (a
+     blank line before/between items) — without this, that inner <p>'s
+     margin stacks on top of the <li> margin instead of collapsing into it,
+     leaving a much bigger gap before the list than intended. */
+  .bubble li > p { margin: 0; }
+  .bubble p { margin: .4em 0; }
+  .bubble strong { font-weight: 600; }
+  .bubble code, .bubble pre {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  .bubble code { background: rgba(127,127,127,.18); border-radius: 4px; padding: .15em .4em; font-size: .85em; }
+  .bubble pre { background: rgba(127,127,127,.12); padding: .8em .9em; margin: 0; overflow-x: auto; }
+  .bubble pre code { background: none; padding: 0; font-size: .85em; line-height: 1.5; }
+
+  /* decorateCodeBlocks() wraps every <pre> in this — language label + copy
+     button, the detail that reads as "Claude/ChatGPT-style" at a glance. */
+  .code-block { border: 1px solid var(--border); border-radius: 8px; margin: .6em 0; overflow: hidden; }
+  .code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .4em .8em;
+    background: rgba(127,127,127,.08);
+    border-bottom: 1px solid var(--border);
+    font-size: .75em;
+    color: var(--muted);
+  }
+  .code-header span { text-transform: lowercase; }
+  .code-header button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1em;
+    font-family: inherit;
+    cursor: pointer;
+    padding: .1em .3em;
+    border-radius: 4px;
+    transition: color .15s ease, background .15s ease;
+  }
+  .code-header button:hover { color: var(--text); background: rgba(127,127,127,.15); }
+  .bubble a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+  .bubble blockquote {
+    margin: .6em 0;
+    padding: .1em 1em;
+    border-left: 3px solid var(--accent);
+    color: var(--muted);
+  }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+
+  /* Markdown tables (compare_models/compare_runs output, mostly) — an
+     unstyled <table> renders with no borders/padding at all, unreadable
+     for anything with more than 2 columns. */
+  .bubble table {
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: .6em 0;
+    font-size: .88em;
+  }
+  .bubble th, .bubble td {
+    border: 1px solid var(--border);
+    padding: .45em .8em;
+    text-align: left;
+  }
+  .bubble th { background: rgba(127,127,127,.1); font-weight: 600; }
+  .bubble tr:nth-child(even) td { background: rgba(127,127,127,.04); }
+
+  #composerWrap { border-top: 1px solid var(--border); padding: .8rem 1rem 1rem; box-shadow: 0 -6px 16px rgba(0,0,0,.03); }
+  #composer { max-width: 760px; margin: 0 auto; }
+
+  #attachChip {
+    display: none;
+    align-items: center;
+    gap: .4rem;
+    align-self: flex-start;
+    font-size: .8rem;
+    color: var(--muted);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .3rem .6rem;
+    margin-bottom: .5rem;
+  }
+  #attachChip.shown { display: flex; }
+  #attachChip button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .9rem;
+    line-height: 1;
+    padding: 0;
+  }
+  #attachChip button:hover { color: var(--error-fg); }
+
+  #inputBar { display: flex; gap: .5rem; }
+  #attachBtn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 10px;
+    padding: 0 .9rem;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  #attachBtn:hover { color: var(--text); border-color: var(--muted); }
+  #attachBtn:disabled { opacity: .5; cursor: default; }
+  #text { flex: 1; padding: .65rem .9rem; border-radius: 10px; font-size: .95rem; }
+  #send {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border: none;
+    border-radius: 10px;
+    padding: 0 1.2rem;
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter .15s ease, transform .1s ease, box-shadow .15s ease;
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  #send:disabled { opacity: .5; cursor: default; box-shadow: none; }
+  #send:not(:disabled):hover { filter: brightness(1.08); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent); }
+  #send:not(:disabled):active { transform: scale(.97); }
+
+  @media (max-width: 700px) {
+    #sidebar { position: fixed; inset: 0 auto 0 0; z-index: 10; margin-left: -260px; }
+    #sidebar.open { margin-left: 0; box-shadow: 2px 0 12px rgba(0,0,0,.2); }
+    #sidebarToggle { display: inline-block; }
+  }
+
+  .hidden { display: none !important; }
+
+  /* ── Login screen — a visibility gate, not real auth: admin/admin is
+     hardcoded client-side, and no backend route checks it. Keeps the app
+     from just sitting open to a casual glance; nothing more. ── */
+  #loginScreen {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+  }
+  #loginCard {
+    width: 100%;
+    max-width: 320px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.8rem 1.6rem;
+    box-shadow: 0 8px 30px rgba(0,0,0,.08);
+    animation: rowIn .35s ease both;
+  }
+  #loginCard h1 { font-size: 1.05rem; margin: 0 0 .3rem; }
+  #loginCard p { font-size: .8rem; color: var(--muted); margin: 0 0 1.2rem; }
+  #loginForm { display: flex; flex-direction: column; gap: .7rem; }
+  #loginForm label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  #loginError { font-size: .8rem; color: var(--error-fg); min-height: 1.1em; }
+  #loginForm button {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border: none;
+    border-radius: 10px;
+    padding: .6rem;
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: .3rem;
+    transition: filter .15s ease, transform .1s ease;
+  }
+  #loginForm button:hover { filter: brightness(1.08); }
+  #loginForm button:active { transform: scale(.98); }
+
+  #logoutBtn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: .72rem;
+    text-align: left;
+    cursor: pointer;
+    padding: 0;
+  }
+  #logoutBtn:hover { color: var(--error-fg); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+</head>
+<body>
+<div id="loginScreen">
+  <div id="loginCard">
+    <h1>Agentic ML Chat</h1>
+    <p>Sign in to continue.</p>
+    <form id="loginForm">
+      <label for="loginUser">Username</label>
+      <input id="loginUser" autocomplete="username" autofocus>
+      <label for="loginPass">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+      <div id="loginError"></div>
+      <button type="submit">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<div id="appShell" class="hidden" style="display: contents;">
+<div id="sidebar">
+  <div id="sidebarHeader">
+    <button id="newChatBtn" type="button">＋ New chat</button>
+  </div>
+  <div id="sessionList"></div>
+  <div id="sidebarFooter">
+    <label for="target">Agent</label>
+    <select id="target">
+      <option value="http://localhost:9100/">Orchestrator (:9100)</option>
+      <option value="http://localhost:9000/">Classification agent (:9000)</option>
+      <option value="http://localhost:9300/">Regression agent (:9300)</option>
+      <option value="http://localhost:9400/">Clustering agent (:9400)</option>
+      <option value="http://localhost:9500/">Anomaly agent (:9500)</option>
+      <option value="http://localhost:9200/">Visualization agent (:9200)</option>
+    </select>
+    <label for="apiKey">API key (optional)</label>
+    <input id="apiKey" placeholder="Bearer token">
+    <button id="logoutBtn" type="button">Sign out</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <button id="sidebarToggle" type="button" title="Toggle sessions">☰</button>
+    <div id="sessionTitle">New chat</div>
+    <div id="statusBar"><span class="dot" id="statusDot"></span><span id="statusText">Ready</span></div>
+  </div>
+  <div id="logWrap"><div id="log"></div></div>
+  <div id="composerWrap">
+    <div id="composer">
+      <div id="attachChip"><span id="attachName"></span><button id="attachRemove" type="button" title="Remove attachment">✕</button></div>
+      <div id="inputBar">
+        <button id="attachBtn" type="button" title="Attach a dataset">📎</button>
+        <input id="fileInput" type="file" accept=".csv,.parquet,.feather,.jsonl,.ndjson" hidden>
+        <input id="text" type="text" placeholder="e.g. Run EDA on /abs/path/to/data.csv with target column label">
+        <button id="send" type="button">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /#appShell -->
+
+<script>
+// ── Session storage — each session remembers its own message log, the
+// A2A thread ids (taskId/contextId), and which agent it was talking to, so
+// switching sessions in the sidebar restores exactly where you left off
+// (as long as that agent's own conversations.db still has the context —
+// see each agent's README section on restart behavior).
+const STORE_KEY = 'agenticMlSessions';
+let sessions = [];
+let activeId = null;
+let attachedPath = null;
+
+const GATEWAY_BASE = 'http://localhost:9001'; // gateway/app.py — /api/v1/upload only
+
+const sidebar = document.getElementById('sidebar');
+const sessionList = document.getElementById('sessionList');
+const sessionTitleEl = document.getElementById('sessionTitle');
+const log = document.getElementById('log');
+const textInput = document.getElementById('text');
+const sendBtn = document.getElementById('send');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const attachBtn = document.getElementById('attachBtn');
+const fileInput = document.getElementById('fileInput');
+const attachChip = document.getElementById('attachChip');
+const attachName = document.getElementById('attachName');
+const targetSelect = document.getElementById('target');
+const apiKeyInput = document.getElementById('apiKey');
+
+function loadStore() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    sessions = Array.isArray(raw.sessions) ? raw.sessions : [];
+    activeId = raw.activeId || null;
+    apiKeyInput.value = raw.apiKey || '';
+  } catch {
+    sessions = [];
+    activeId = null;
+  }
+}
+function saveStore() {
+  localStorage.setItem(STORE_KEY, JSON.stringify({ sessions, activeId, apiKey: apiKeyInput.value }));
+}
+function activeSession() {
+  return sessions.find(s => s.id === activeId) || null;
+}
+
+function newSession() {
+  const s = {
+    id: crypto.randomUUID(),
+    title: 'New chat',
+    target: targetSelect.value,
+    taskId: null,
+    contextId: null,
+    messages: [],
+    createdAt: Date.now(),
+  };
+  sessions.unshift(s);
+  activeId = s.id;
+  saveStore();
+  renderSidebar();
+  renderActiveSession();
+}
+
+function deleteSession(id, ev) {
+  ev.stopPropagation();
+  sessions = sessions.filter(s => s.id !== id);
+  if (activeId === id) activeId = sessions[0]?.id || null;
+  if (!activeId) { newSession(); return; }
+  saveStore();
+  renderSidebar();
+  renderActiveSession();
+}
+
+function selectSession(id) {
+  activeId = id;
+  saveStore();
+  renderSidebar();
+  renderActiveSession();
+  if (window.innerWidth <= 700) sidebar.classList.remove('open');
+}
+
+function renderSidebar() {
+  sessionList.innerHTML = '';
+  for (const s of sessions) {
+    const item = document.createElement('div');
+    item.className = 'session-item' + (s.id === activeId ? ' active' : '');
+    item.onclick = () => selectSession(s.id);
+    const title = document.createElement('span');
+    title.className = 'session-title';
+    title.textContent = s.title;
+    const del = document.createElement('button');
+    del.className = 'session-delete';
+    del.textContent = '✕';
+    del.title = 'Delete chat';
+    del.onclick = (ev) => deleteSession(s.id, ev);
+    item.appendChild(title);
+    item.appendChild(del);
+    sessionList.appendChild(item);
+  }
+}
+
+function renderActiveSession() {
+  const s = activeSession();
+  log.innerHTML = '';
+  clearAttachment();
+  if (!s) { sessionTitleEl.textContent = 'New chat'; setStatus('Ready'); return; }
+  sessionTitleEl.textContent = s.title;
+  targetSelect.value = s.target;
+  for (const m of s.messages) renderBubble(m.role, m.text);
+  log.scrollTop = log.scrollHeight;
+  setStatus(s.taskId ? 'Waiting on your answer above ↑' : 'Ready');
+}
+
+function setStatus(text, waiting) {
+  statusText.textContent = text;
+  statusDot.classList.toggle('waiting', !!waiting);
+}
+
+// The header bar + copy button on code blocks — the detail most people
+// actually recognize as "Claude/ChatGPT-style" rendering. Operates on the
+// already-sanitized DOM (after DOMPurify), building elements directly
+// rather than another innerHTML pass.
+function decorateCodeBlocks(bubble) {
+  for (const pre of bubble.querySelectorAll('pre')) {
+    const code = pre.querySelector('code');
+    if (!code) continue;
+    const lang = /language-(\w+)/.exec(code.className || '');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block';
+    const header = document.createElement('div');
+    header.className = 'code-header';
+    const langLabel = document.createElement('span');
+    langLabel.textContent = lang ? lang[1] : 'text';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    };
+    header.append(langLabel, copyBtn);
+
+    pre.replaceWith(wrapper);
+    wrapper.append(header, pre);
+  }
+}
+
+// Renders a bubble in the DOM only — doesn't touch session state (see
+// addMessage, which does both).
+function renderBubble(role, text) {
+  const row = document.createElement('div');
+  row.className = 'row ' + role;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  if (role === 'agent' && window.marked && window.DOMPurify) {
+    bubble.innerHTML = DOMPurify.sanitize(marked.parse(text));
+    decorateCodeBlocks(bubble);
+  } else {
+    bubble.textContent = text;
+  }
+  row.appendChild(bubble);
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+  return bubble;
+}
+
+function addMessage(role, text) {
+  const s = activeSession();
+  renderBubble(role, text);
+  if (!s) return;
+  s.messages.push({ role, text });
+  // Auto-title from the first user message — same idea as Claude/ChatGPT
+  // titling a chat from what you first asked.
+  if (s.title === 'New chat' && role === 'user') {
+    s.title = text.length > 42 ? text.slice(0, 42).trim() + '…' : text;
+    sessionTitleEl.textContent = s.title;
+    renderSidebar();
+  }
+  saveStore();
+}
+
+document.getElementById('newChatBtn').onclick = newSession;
+apiKeyInput.addEventListener('input', saveStore);
+document.getElementById('sidebarToggle').onclick = () => sidebar.classList.toggle('open');
+
+function setAttachment(path, name) {
+  attachedPath = path;
+  attachName.textContent = '📄 ' + name;
+  attachChip.classList.add('shown');
+}
+function clearAttachment() {
+  attachedPath = null;
+  attachChip.classList.remove('shown');
+}
+
+document.getElementById('attachRemove').onclick = clearAttachment;
+attachBtn.onclick = () => fileInput.click();
+fileInput.onchange = async () => {
+  const file = fileInput.files[0];
+  fileInput.value = ''; // allow re-picking the same file later
+  if (!file) return;
+  attachBtn.disabled = true;
+  setStatus('Uploading ' + file.name + '…');
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(GATEWAY_BASE + '/api/v1/upload', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    setAttachment(data.file_path, file.name);
+    setStatus('Ready');
+  } catch (err) {
+    addMessage('error', 'Upload failed: ' + err.message + ' — is the gateway running on ' + GATEWAY_BASE + '?');
+    setStatus('Ready');
+  } finally {
+    attachBtn.disabled = false;
+    textInput.focus();
+  }
+};
+
+async function send() {
+  const s = activeSession();
+  if (!s) return;
+  const typed = textInput.value.trim();
+  if (!typed && !attachedPath) return;
+  const text = attachedPath ? `Dataset: ${attachedPath}\n${typed}`.trim() : typed;
+  textInput.value = '';
+  clearAttachment();
+  sendBtn.disabled = true;
+  addMessage('user', text);
+  setStatus('Waiting for reply…', true);
+
+  const url = s.target;
+  const apiKey = apiKeyInput.value.trim();
+
+  const message = {
+    role: 'user',
+    parts: [{ kind: 'text', text }],
+    messageId: crypto.randomUUID(),
+  };
+  if (s.taskId) message.taskId = s.taskId;
+  if (s.contextId) message.contextId = s.contextId;
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+
+  const row = document.createElement('div');
+  row.className = 'row agent';
+  const pending = document.createElement('div');
+  pending.className = 'bubble pending';
+  pending.textContent = 'thinking…';
+  row.appendChild(pending);
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+
+  const controller = new AbortController();
+  // Must be >= gateway's GATEWAY_AGENT_TIMEOUT / orchestrator's
+  // REMOTE_AGENT_TIMEOUT (3600s) — LLM/SHAP work on large data can take
+  // several minutes, so a shorter UI timeout just aborts before the real
+  // reply arrives (see gateway/agent_client.py).
+  const timeout = setTimeout(() => controller.abort(), 3600000);
+
+  try {
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: crypto.randomUUID(),
+          method: 'message/send',
+          params: { message },
+        }),
+      });
+    } catch (fetchErr) {
+      row.remove();
+      if (fetchErr.name === 'AbortError') {
+        addMessage('error', 'Timed out waiting for ' + url + ' — check the terminal running that agent.');
+      } else {
+        addMessage('error', 'Network error calling ' + url + ': ' + fetchErr.message);
+      }
+      return;
+    }
+
+    row.remove();
+
+    const rawText = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      addMessage('error', 'HTTP ' + resp.status + ' — non-JSON response: ' + rawText.slice(0, 300));
+      return;
+    }
+
+    if (data.error) {
+      addMessage('error', data.error.message || JSON.stringify(data.error));
+      return;
+    }
+
+    const task = data.result;
+    s.taskId = task.id ?? s.taskId;
+    s.contextId = task.contextId ?? s.contextId;
+
+    const statusMsg = task.status && task.status.message;
+    const reply = statusMsg
+      ? statusMsg.parts.filter(p => p.kind === 'text').map(p => p.text).join('\n')
+      : '(no reply text — state: ' + (task.status && task.status.state) + ')';
+    addMessage('agent', reply);
+
+    if (task.status && task.status.state === 'completed') {
+      // taskId resets (a turn finished), contextId stays — the conversation
+      // thread continues until this chat is deleted.
+      s.taskId = null;
+      setStatus('Ready');
+    } else {
+      setStatus('Waiting on your answer above ↑');
+    }
+    saveStore();
+  } finally {
+    clearTimeout(timeout);
+    sendBtn.disabled = false;
+    textInput.focus();
+  }
+}
+
+sendBtn.onclick = send;
+textInput.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+// ── Login — a visibility gate only, see the CSS comment above
+// #loginScreen. admin/admin, checked client-side, nothing more. ────────
+const AUTH_KEY = 'agenticMlAuthed';
+const loginScreen = document.getElementById('loginScreen');
+const appShell = document.getElementById('appShell');
+const loginForm = document.getElementById('loginForm');
+const loginUser = document.getElementById('loginUser');
+const loginPass = document.getElementById('loginPass');
+const loginError = document.getElementById('loginError');
+
+function showApp() {
+  loginScreen.classList.add('hidden');
+  appShell.classList.remove('hidden');
+}
+function showLogin() {
+  appShell.classList.add('hidden');
+  loginScreen.classList.remove('hidden');
+  loginError.textContent = '';
+  loginPass.value = '';
+  loginUser.focus();
+}
+
+loginForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (loginUser.value === 'admin' && loginPass.value === 'admin') {
+    localStorage.setItem(AUTH_KEY, '1');
+    showApp();
+  } else {
+    loginError.textContent = 'Wrong username or password.';
+    loginPass.value = '';
+    loginPass.focus();
+  }
+});
+
+document.getElementById('logoutBtn').onclick = () => {
+  localStorage.removeItem(AUTH_KEY);
+  showLogin();
+};
+
+// ── Boot ──────────────────────────────────────────────────────────────
+loadStore();
+if (!activeSession()) newSession();
+else { renderSidebar(); renderActiveSession(); }
+
+if (localStorage.getItem(AUTH_KEY) === '1') showApp();
+else showLogin();
+</script>
+</body>
+</html>

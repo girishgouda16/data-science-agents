@@ -1,0 +1,21 @@
+a2a-sdk[sqlite]==0.3.26   # [sqlite]: durable A2A task state (core/runtime.task_store)
+langgraph>=1.2,<2             # the agent loop + durable per-step checkpoints (core/agent_host.py)
+langgraph-checkpoint-sqlite>=3,<4   # checkpoints on one host; Postgres: langgraph-checkpoint-postgres + AGENT_CHECKPOINT_URL
+mcp>=1.2.0,<2
+litellm>=1.50.0,<2.0.0    # provider-agnostic model calls — model choice is REGRESSION_AGENT_MODEL/LLM_PROVIDER, not a hardcoded SDK
+python-dotenv>=1.0.0,<2.0.0
+pandas>=2.1.0,<3.0.0
+pyarrow>=14.0.0            # parquet snapshots and files — core/datasource.py
+scikit-learn>=1.4.0,<2.0.0
+scipy>=1.11.0,<2.0.0
+joblib>=1.3.0,<2.0.0
+optuna>=3.5.0,<4.0.0
+xgboost>=2.0.0,<3.0.0
+shap>=0.45.0,<1.0.0
+uvicorn[standard]>=0.29.0,<1.0.0
+starlette>=0.37.0,<1.0.0
+sqlalchemy>=2.0.0,<3.0.0   # run_persistence.py — writes the shared training_runs table
+pyjwt>=2.8.0,<3.0.0        # bearer auth is now required by default, see agent.py
+
+# ── Dev / Test ───────────────────────────────────────────────────────────
+pytest>=8.0.0

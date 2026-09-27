@@ -1,0 +1,21 @@
+# ── API ───────────────────────────────────────────────────────────────────────
+fastapi>=0.111.0,<1.0.0
+python-multipart>=0.0.9  # required by FastAPI for multipart/form-data (file upload)
+uvicorn[standard]>=0.29.0,<1.0.0
+pydantic>=2.7.0,<3.0.0
+pydantic-settings>=2.2.0,<3.0.0
+httpx>=0.27.0,<1.0.0
+pyjwt>=2.8.0,<3.0.0           # JWT bearer auth on /api/v1 — core/auth.py
+a2a-sdk==0.3.26               # A2A client — gateway/agent_client.py talks to the orchestrator over it
+joblib>=1.3.0,<2.0.0          # Model artifact (.pkl) persistence — core/db.py
+
+# ── Persistence (training run metadata + predictions) ──────────────────────────
+sqlalchemy>=2.0.0,<3.0.0
+alembic>=1.13.0,<2.0.0
+psycopg2-binary>=2.9.0,<3.0.0   # only needed if DATABASE_URL points at Postgres
+
+# ── Dev / Test ────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+requests>=2.31.0              # For test scripts
+

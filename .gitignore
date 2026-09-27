@@ -1,0 +1,76 @@
+# Secrets / environment
+.env
+.env.backup-*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv
+venv/
+env/*.lock
+
+# Hidden local / tooling
+.claude/
+.claude-plugin/
+.pytest_cache/
+.ruff_cache/
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Notebooks
+notebooks/.ipynb_checkpoints/
+
+# Data (generated & local)
+data/*.parquet
+data/*.feather
+data/*.csv
+data/*.db
+data/artifacts/
+data/runs/
+data/smoke/
+# Per-deployment runtime (A2A DBs, uploads, predictions); `git rm --cached` if tracked
+data/a2a/
+data/uploads/
+data/predictions/
+*.csv
+*.png
+# The public Titanic benchmark (60 KB) is the one data file the test suites read.
+!data/titanic.csv
+
+# ML artifacts
+mlruns/
+*.ckpt
+*.pt
+*.pkl
+*.joblib
+
+# Logs
+*.log
+logs/
+
+# Local runtime state
+conversations.db
+# per-agent chat history — may contain real dataset content/user messages
+.agents/skills/classification-skill/scripts/.sessions/
+
+# Docs (local audits/plans); README-cited files stay tracked
+docs/*
+!docs/GO_LIVE.md
+!docs/agent-eval-report.md
+
+# Test & smoke artifacts
+*/scripts/test_artifacts/*.monitoring.json
+*/scripts/test_artifacts/*.reference.csv
+*/scripts/test_artifacts/*.sha256.json
