@@ -69,8 +69,8 @@ def test_modeling_on_demand_reference_is_not_force_loaded():
     assert "domain-notes" in on_demand, (
         "domain-notes must be on_demand, not auto-loaded, so business-understanding/diagnostics can fetch it without unlocking modeling's tools"
     )
-    # Base body (SKILL.md + auto-loaded domain-notes.md) was 664 lines before this split;
-    # generous margin below that, not a tight budget — the point is "meaningfully leaner", not a magic number.
+    # The base body (SKILL.md + auto-loaded references) stays lean; step-by-step
+    # detail belongs in on_demand references. The limit is a margin, not a budget.
     assert len(base_body.splitlines()) < 350, (
         "modeling's base body should stay lean — the step-by-step detail belongs in the on_demand reference"
     )

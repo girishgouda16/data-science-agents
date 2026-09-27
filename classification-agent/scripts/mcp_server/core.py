@@ -423,9 +423,9 @@ def _bootstrap_cis(
 #
 # Every positive-class number in this codebase — recall_positive, the tuned
 # operating point, fairness TPR, PR-AUC, SHAP's explained class, the success
-# gate — used to resolve the positive class as `y.max()` / `classes_[1]`,
-# i.e. the sorted-max label. That is right for {0,1} and for {"No","Yes"},
-# and WRONG, silently, for every target labelled with words:
+# gate — must use the same positive class. The sorted-max label
+# (`y.max()` / `classes_[1]`) is right for {0,1} and for {"No","Yes"}, and
+# silently wrong for many targets labelled with words:
 #
 #     {"churn", "no_churn"} -> max is "no_churn"
 #     {"fraud", "legit"}    -> max is "legit"

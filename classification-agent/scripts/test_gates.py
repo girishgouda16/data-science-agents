@@ -116,8 +116,7 @@ def identifier_ratio_gap() -> None:
         "small categorical must not trip the ratio rule"
     )
 
-    # Both entry points must agree — they used to disagree (detect_data_leakage
-    # demanded 100% uniqueness where propose_drop_columns wanted 98%).
+    # detect_data_leakage and propose_drop_columns must flag the same ID columns.
     path = _csv(df, "idgap")
     run_id = json.loads(m.prepare_dataset(path, "label"))["run_id"]
     proposals = json.loads(m.propose_drop_columns(run_id))["proposals"]

@@ -42,10 +42,7 @@ import mcp_server as m
 REPO_ROOT = Path(__file__).parent.parent.parent
 TITANIC = str(REPO_ROOT / "data" / "titanic.csv")
 
-# Built from sklearn's bundled dataset rather than a data/iris.csv file —
-# that file doesn't actually exist in this repo (the test was silently
-# broken on FileNotFoundError before this fix). sklearn is already a
-# dependency; no new file to keep in sync or forget to commit.
+# Built from sklearn's bundled iris dataset, so the test needs no data file.
 _iris = load_iris(as_frame=True).frame
 _iris["species"] = _iris.pop("target").map(dict(enumerate(load_iris().target_names)))
 _iris_fd, IRIS = tempfile.mkstemp(suffix=".csv")

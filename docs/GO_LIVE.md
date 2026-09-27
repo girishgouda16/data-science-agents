@@ -86,8 +86,8 @@ Signed in as a normal user, for classification and one other agent:
 
 - A bad champion: every promotion returns its `rollback` call; `demote_model('champion', confirmed=true)`
   withdraws it.
-- Code: revert the release commit; no schema migration was added (checkpoint and task databases are
-  new files; the gateway's session table is unchanged).
+- Code: check out the previous release tag. If it has an older database schema, run
+  `alembic downgrade <its revision>` before `make up`.
 - SSO trouble: unset `OIDC_ISSUER` to fall back to dev tokens (admins only — never on an open network).
 
 ## 8. Known limits (tell users)

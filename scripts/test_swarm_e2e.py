@@ -223,8 +223,8 @@ def test_chart_and_report_describe_the_same_class_and_the_same_model(trained, ag
         f"chart AUC {roc['auc']['positive_class']} disagrees with reported {reported}"
     )
 
-    # Charts must not collide across runs: a report links a URL, and a later
-    # run asking for "roc.png" used to overwrite the image under it.
+    # Charts must not collide across runs: a report links a URL, so a later
+    # run's "roc.png" must not overwrite the image under it.
     assert run_id in roc["out_path"]
 
 

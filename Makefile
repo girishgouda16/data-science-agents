@@ -119,12 +119,8 @@ user:
 # test_skill_gating.py spawns its own MCP subprocess and test_mcp_server/
 # calls the tool functions directly.
 #
-# pytest per agent directory, rather than naming individual files. Naming
-# them meant this target silently ran a SUBSET: classification-agent has
-# eight test files and this used to invoke two of them, so the readiness-gate
-# tests, the split-integrity tests and the positive-class regression tests
-# never ran in CI at all. A discovery run cannot go stale when a file is
-# added.
+# pytest discovers tests per agent directory instead of naming files, so a
+# newly added test file always runs.
 #
 # Each agent runs from its own directory because each is its own deployable
 # with its own requirements.txt — this assumes one env has all of them

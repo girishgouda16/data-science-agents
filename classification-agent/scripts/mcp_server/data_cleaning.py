@@ -105,11 +105,9 @@ def apply_imputation(run_id: str, strategies: str) -> str:
 # The identifier heuristics live here, in ONE place, because three callers
 # need the identical answer: propose_drop_columns (what to drop),
 # diagnostics.detect_data_leakage (what to flag), and eda.propose_group_column
-# (what to group-split on). They used to be re-implemented per caller and
-# drifted — detect_data_leakage's copy required uniqueness == 100% where
-# propose_drop_columns wanted >= 98%, so a column could be "safe to keep"
-# and "an ID column" in the same run. Change a threshold here, every caller
-# moves together.
+# (what to group-split on). Separate copies would drift apart, and one column
+# could be "safe to keep" and "an ID column" in the same run. Change a
+# threshold here and every caller moves together.
 #
 # The three cardinality signals cover three different corners of the
 # (uniqueness ratio x absolute distinct count) space. Each was added after a

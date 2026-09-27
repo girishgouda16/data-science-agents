@@ -439,7 +439,7 @@ def main():
     _imputation_strategies_check()
     _overfit_gate_check()
 
-    # multi-run compare_runs — previously only ever exercised with one run_id.
+    # compare_runs across three runs at once.
     compared = json.loads(
         m.compare_runs(f"{kmeans_run_id},{dbscan_run_id},{hierarchical_run_id}")
     )
