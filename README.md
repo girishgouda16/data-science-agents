@@ -33,8 +33,8 @@ Bring a problem. Get a model you can defend.
 
 ## Why this one
 
-Other AI data scientists chase the highest score. This one refuses to ship
-a model it cannot defend.
+It does not chase the highest score. It refuses to ship a model it cannot
+defend.
 
 - **Judgment before score.** It asks what only the business knows: what the
   model is for, the success bar, how many alerts the team can review, where
@@ -51,25 +51,24 @@ no baseline. The hard part now is trusting them, and that is what this
 platform is for: teams that must explain a model to a manager, an auditor
 or a regulator.
 
-### How it compares
+### What you get
 
-| | Agents that optimise a metric (AIDE, RD-Agent) | Chat-with-data tools (PandasAI, TaskWeaver) | AutoML (AutoGluon) | **Data Science Agents** |
-| --- | :-: | :-: | :-: | :-: |
-| Asks what the model is for | – | – | – | **yes** |
-| Splits by customer and time, screens for leakage | partly | – | partly | **yes** |
-| Blocks a model that fails a gate | – | – | – | **yes** |
-| Registry, serving and drift | – | – | – | **yes** |
-| Several users, each with their own runs | – | – | – | **yes** |
-| Runs audited tools, not free-form generated code | – | – | yes | **yes** |
-
-Built openly: read every tool, run it on your own machines with any LLM,
-and use the same tools from Claude Code or any MCP client.
+- Business questions asked up front, never invented answers
+- Splits by customer and by time, and a leakage screen after every column change
+- A baseline every model must beat
+- Readiness gates that block export and promotion until they pass
+- A report that opens with the verdict and lists every assumption
+- Model registry with champion and challenger, scoring, and drift checks
+- Several users, each with their own chats, uploads and runs
+- Tested tools, not free-form scripts: a custom feature is a formula you can read
+- Built in the open: read every tool, run it on your own machines with any
+  LLM, and use the same tools from Claude Code or any MCP client
 
 ## Before / after
 
 You ask for a churn model.
 
-A typical AutoML run shuffles the rows, so the same customer lands in both
+A careless pipeline shuffles the rows, so the same customer lands in both
 train and test. A `cancellation_reason` column predicts churn perfectly.
 AUC 0.99. Shipped.
 
