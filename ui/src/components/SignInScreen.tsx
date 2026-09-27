@@ -18,7 +18,7 @@ export function SignInScreen() {
     <div className="connect-screen">
       <div className="connect-card">
         <div className="brand">
-          <span className="brand-mark">◆</span> Holdout
+          <span className="brand-mark">◆</span> Data Scientist Agents
         </div>
         <p>
           Train, evaluate, promote and monitor models by talking to a team of ML agents — from EDA to MLOps.

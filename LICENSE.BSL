@@ -4,8 +4,8 @@ License text copyright (c) 2020 MariaDB Corporation Ab, All Rights Reserved.
 Parameters
 
 Licensor:             Girish Kumar Gouda
-Licensed Work:        Holdout core: the core/ directory and every *-agent/
-                      directory of this repository. The Licensed Work is
+Licensed Work:        Data Scientist Agents core: the core/ directory and
+                      every *-agent/ directory of this repository. The Licensed Work is
                       (c) 2026 Girish Kumar Gouda.
 Additional Use Grant: You may make production use of the Licensed Work,
                       including self-hosting it to build, deploy and monitor

@@ -1,4 +1,4 @@
-# Holdout — chat UI
+# Data Scientist Agents — chat UI
 
 React app served by the gateway. Start the product from the repo root
 (`make setup`, then `make up`). See the root [README](../README.md).

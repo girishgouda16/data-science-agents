@@ -1,4 +1,4 @@
-name: Holdout CI
+name: Data Scientist Agents CI
 
 # Every agent, EDA to MLOps: the five training agents (classification,
 # regression, clustering, anomaly, forecasting), everything they hand work to

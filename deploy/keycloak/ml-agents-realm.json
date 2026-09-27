@@ -1,6 +1,6 @@
 {
   "realm": "ml-agents",
-  "displayName": "Holdout",
+  "displayName": "Data Scientist Agents",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,
@@ -20,7 +20,7 @@
   "clients": [
     {
       "clientId": "ml-agents-ui",
-      "name": "Holdout web UI",
+      "name": "Data Scientist Agents web UI",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,

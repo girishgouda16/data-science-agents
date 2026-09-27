@@ -4,7 +4,7 @@
 
 Please do not open a public issue. Email [girishgouda6@gmail.com](mailto:girishgouda6@gmail.com).
 You can also use **Security → Report a vulnerability** on
-[github.com/girishgouda16/holdout](https://github.com/girishgouda16/holdout)
+[github.com/girishgouda16/data-scientist-agents](https://github.com/girishgouda16/data-scientist-agents)
 once private vulnerability reporting is enabled for the repository.
 
 ## Before you deploy

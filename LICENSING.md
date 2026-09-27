@@ -1,6 +1,6 @@
 # Licensing
 
-Holdout uses two licenses.
+Data Scientist Agents uses two licenses.
 
 | Path | License |
 | --- | --- |
