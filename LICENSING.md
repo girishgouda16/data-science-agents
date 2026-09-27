@@ -1,6 +1,6 @@
 # Licensing
 
-Data Scientist Agents uses two licenses.
+Data Science Agents uses two licenses.
 
 | Path | License |
 | --- | --- |

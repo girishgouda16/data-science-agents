@@ -1,11 +1,11 @@
-<h1 align="center">Data Scientist Agents</h1>
+<h1 align="center">Data Science Agents</h1>
 
 <p align="center">
   <em>The senior data scientist who won't ship your model until it earns it.</em>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/girishgouda16/data-scientist-agents/ci.yml?branch=main&style=flat-square&label=ci" alt="CI">
+  <img src="https://img.shields.io/github/actions/workflow/status/girishgouda16/data-science-agents/ci.yml?branch=main&style=flat-square&label=ci" alt="CI">
   <img src="https://img.shields.io/badge/status-alpha-111111?style=flat-square" alt="Alpha">
   <img src="https://img.shields.io/badge/license-Apache--2.0%20%2B%20BSL-111111?style=flat-square" alt="Apache-2.0 + BSL license">
   <img src="https://img.shields.io/badge/agents-10-111111?style=flat-square" alt="10 agents">
@@ -27,7 +27,7 @@ asks what the model is *for*. Splits by customer before anyone says
 Refuses to ship a model that loses to "same as last month". Writes down
 every assumption, so you can argue with it later.
 
-Data Scientist Agents puts that data scientist behind a chat box: ten
+Data Science Agents puts that data scientist behind a chat box: ten
 agents that take you from a raw table to a monitored model in production.
 Bring a problem. Get a model you can defend.
 
@@ -39,7 +39,7 @@ A typical AutoML run shuffles the rows, so the same customer lands in both
 train and test. A `cancellation_reason` column predicts churn perfectly.
 AUC 0.99. Shipped.
 
-With Data Scientist Agents (a condensed, illustrative conversation):
+With Data Science Agents (a condensed, illustrative conversation):
 
 ```text
 you    Predict churned from subscribers.parquet.

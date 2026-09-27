@@ -99,7 +99,7 @@ async def _lifespan(_app: FastAPI):
         follower.cancel()
 
 
-app = FastAPI(title="Data Scientist Agents Gateway", lifespan=_lifespan)
+app = FastAPI(title="Data Science Agents Gateway", lifespan=_lifespan)
 if settings.cors_origins:
     app.add_middleware(
         CORSMiddleware,

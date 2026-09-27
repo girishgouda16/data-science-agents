@@ -1,4 +1,4 @@
-name: Data Scientist Agents CI
+name: Data Science Agents CI
 
 # Every agent, EDA to MLOps: the five training agents (classification,
 # regression, clustering, anomaly, forecasting), everything they hand work to

@@ -47,7 +47,7 @@ export function Sidebar({
     <nav className={`sidebar ${open ? "open" : ""}`} aria-label="Navigation">
       <div className="sidebar-header">
         <div className="brand">
-          <span className="brand-mark">◆</span> Data Scientist Agents
+          <span className="brand-mark">◆</span> Data Science Agents
         </div>
         <button
           type="button"

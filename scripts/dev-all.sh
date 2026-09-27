@@ -86,7 +86,7 @@ grep -E "CORE agents not healthy|optional agents down" logs/swarm.log || true
 
 echo
 echo "════════════════════════════════════════════════════════════"
-echo "  Data Scientist Agents is up — open $URL"
+echo "  Data Science Agents is up — open $URL"
 if [ -n "${OIDC_ISSUER:-}" ]; then
   echo "  Sign in with your Keycloak account ($OIDC_ISSUER)"
   echo "  No account yet?  make user u=<name>   (admin=1 for ml-admin)"

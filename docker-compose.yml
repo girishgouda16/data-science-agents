@@ -211,7 +211,7 @@ services:
     volumes:
       - langfuse_postgres_data:/var/lib/postgresql/data
 
-  # Sign-in for Data Scientist Agents (the gateway verifies its tokens — core/auth.py).
+  # Sign-in for Data Science Agents (the gateway verifies its tokens — core/auth.py).
   # Realm "ml-agents" is imported from deploy/keycloak on first start. Data in
   # the shared Postgres under its own schema. Production: behind a TLS proxy,
   # KEYCLOAK_COMMAND="start --import-realm", KEYCLOAK_HOSTNAME=https://sso.example.com,

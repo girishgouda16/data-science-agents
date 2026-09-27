@@ -29,7 +29,7 @@ out="$(compose exec -T -e U="$U" -e P="$PASS" -e A="$ADMIN" -e T="$TEMP" -e NEW=
     [ "$NEW" = 1 ] && { echo "exists"; exit 0; }
   else
     $kc create users $cfg -r ml-agents -s username="$U" -s enabled=true \
-        -s email="$U@ml-agents.local" -s emailVerified=true -s firstName="$U" -s lastName="Data Scientist Agents" >/dev/null
+        -s email="$U@ml-agents.local" -s emailVerified=true -s firstName="$U" -s lastName="Data Science Agents" >/dev/null
   fi
   if [ "$T" = 1 ]; then $kc set-password $cfg -r ml-agents --username "$U" --new-password "$P" --temporary
   else $kc set-password $cfg -r ml-agents --username "$U" --new-password "$P"; fi

@@ -1,6 +1,6 @@
 {
   "realm": "ml-agents",
-  "displayName": "Data Scientist Agents",
+  "displayName": "Data Science Agents",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,
@@ -20,7 +20,7 @@
   "clients": [
     {
       "clientId": "ml-agents-ui",
-      "name": "Data Scientist Agents web UI",
+      "name": "Data Science Agents web UI",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
