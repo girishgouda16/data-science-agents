@@ -345,3 +345,4 @@ source-available under the [Business Source License 1.1](LICENSE.BSL): free to
 use, change and self-host, including in production. Offering them to others as
 a hosted service needs a commercial license. Each version becomes Apache-2.0
 four years after its release. Everything else is [Apache-2.0](LICENSE).
+Details: [LICENSING.md](LICENSING.md).
