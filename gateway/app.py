@@ -391,26 +391,37 @@ async def delete_session(session_id: str, claims: dict = Depends(verify_jwt)):
 async def upload(file: UploadFile = File(...), claims: dict = Depends(verify_jwt)):
     # Authenticated: an open upload lets anyone fill the disk, and the file
     # lands in the uploader's own folder (see start_session).
-    contents = await file.read()
     max_bytes = settings.max_file_size_mb * 1024 * 1024
-    if len(contents) > max_bytes:
-        raise HTTPException(
-            HTTP_413_CONTENT_TOO_LARGE,
-            f"File exceeds {settings.max_file_size_mb}MB limit",
-        )
+    too_large = HTTPException(
+        HTTP_413_CONTENT_TOO_LARGE, f"File exceeds {settings.max_file_size_mb}MB limit"
+    )
     # Data files only, and each must BE the format its name claims (magic
     # bytes for binary formats, no NUL bytes in text ones): a .pkl "dataset"
     # is code that runs when something loads it, and a renamed one must not
     # get in as "parquet". Tools only ever parse these with pandas/pyarrow.
     name = Path(file.filename or "upload.csv").name
-    if not datasource.looks_like(name, contents[:8192]):
+    chunk = await file.read(1 << 20)
+    if not datasource.looks_like(name, chunk[:8192]):
         raise HTTPException(415, f"only data files can be uploaded ({', '.join(sorted(datasource.DATA_SUFFIXES))}), "
                                  "and the content must match the extension")
     folder = _user_uploads(claims)
     folder.mkdir(parents=True, exist_ok=True)
     dest = folder / f"{uuid.uuid4()}_{name}"
-    dest.write_bytes(contents)
-    return {"file_path": str(dest.resolve()), "name": name, "size_bytes": len(contents)}
+    # Streamed to disk in 1 MB chunks: parallel uploads never hold whole
+    # files in memory. A file over the limit is deleted, not kept partial.
+    size = 0
+    try:
+        with dest.open("wb") as out:
+            while chunk:
+                size += len(chunk)
+                if size > max_bytes:
+                    raise too_large
+                out.write(chunk)
+                chunk = await file.read(1 << 20)
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
+    return {"file_path": str(dest.resolve()), "name": name, "size_bytes": size}
 
 
 @app.get("/api/v1/download")

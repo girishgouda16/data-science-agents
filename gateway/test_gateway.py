@@ -383,6 +383,19 @@ def test_bad_file_paths_rejected():
         assert resp.status_code == status, (path, resp.status_code)
 
 
+def test_upload_over_limit_is_refused_and_not_kept(monkeypatch):
+    monkeypatch.setattr(g.settings, "max_file_size_mb", 1)
+    before = set(g.UPLOAD_DIR.rglob("*"))
+    body = b"a,b\n" + b"1,2\n" * 300_000  # ~1.2 MB, spans two chunks
+    resp = client.post(
+        "/api/v1/upload", files={"file": ("big.csv", body, "text/csv")}, headers=headers
+    )
+    assert resp.status_code == 413, resp.status_code
+    assert set(g.UPLOAD_DIR.rglob("*")) - before <= {p for p in g.UPLOAD_DIR.rglob("*") if p.is_dir()}, (
+        "a refused upload must not leave a partial file"
+    )
+
+
 def test_upload_then_session_round_trip():
     anonymous = client.post(
         "/api/v1/upload", files={"file": ("mine.csv", b"a,b\n1,2\n", "text/csv")}
