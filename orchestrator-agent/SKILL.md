@@ -84,6 +84,13 @@ Rules that make this correct rather than merely long:
    gate: their charts are evidence to show, never a reason to refuse a promotion
    their own agent accepts — the training agent's gates decide that, not you.
 
+   **Readiness is the owning agent's answer, never yours.** A verdict goes
+   stale the moment another agent adds evidence (charts written after
+   export). After any hand-off that touches a run, ask the agent that owns
+   it to run `check_readiness` again and relay that result: its status and
+   its failed and not-run gates, by name. Never say which gate blocks what
+   from your own reasoning or from an earlier reply.
+
 5. **Stop at the edge of what was asked.** Training implies charts and a
    report; it does not imply deploying to serving or standing up
    monitoring. Do those when the user asked, or when they described an
