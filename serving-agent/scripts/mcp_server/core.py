@@ -39,7 +39,7 @@ import pandas as pd
 
 from mcp.server.fastmcp import FastMCP
 
-from pipeline_transformers import ForecastModel
+from pipeline_transformers import ForecastModel, PanelForecastModel
 
 mcp = FastMCP("serving-agent")
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root, for core.*
@@ -380,10 +380,14 @@ def _predict_forecast(
         if not future_exog_file.exists():
             return json.dumps({"error": f"no data file at '{future_exog_path}'"})
         future_exog = pd.read_csv(future_exog_file)
-        if len(future_exog) != horizon:
+        # A multi-series model needs `horizon` rows for every series.
+        n_series = len(fm.scales) if isinstance(fm, PanelForecastModel) else 1
+        if len(future_exog) != horizon * n_series:
+            per = f" × {n_series} series" if n_series > 1 else ""
             return json.dumps(
                 {
-                    "error": f"future_exog_path has {len(future_exog)} row(s), expected exactly horizon={horizon}"
+                    "error": f"future_exog_path has {len(future_exog)} row(s), "
+                    f"expected exactly horizon={horizon}{per} = {horizon * n_series}"
                 }
             )
 

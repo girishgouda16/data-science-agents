@@ -328,6 +328,16 @@ def main():
         and "expected exactly horizon=6" in exog_mismatch["error"]
     )
 
+    # A multi-series model needs horizon rows per series: 2 series × 3 = 6.
+    from mcp_server.core import _predict_forecast
+    from pipeline_transformers import PanelForecastModel
+
+    panel = object.__new__(PanelForecastModel)
+    panel.scales = {"a": 1.0, "b": 1.0}
+    pd.DataFrame({"x": range(3)}).to_csv(bad_exog, index=False)
+    panel_mismatch = json.loads(_predict_forecast(panel, str(forecast_pkl), 3, str(bad_exog), ""))
+    assert "horizon=3 × 2 series = 6" in panel_mismatch["error"], panel_mismatch
+
     zero_horizon = json.loads(m.predict(str(forecast_pkl), horizon=0))
     assert "error" in zero_horizon and "horizon must be > 0" in zero_horizon["error"]
 
