@@ -510,7 +510,8 @@ def compute_readiness(run_id: str) -> dict:
     elif calibration.get("miscalibration_warning") and operating_point is not None:
         checks["calibration_checked"] = _gate(
             FAIL,
-            f"ECE {calibration.get('expected_calibration_error')} exceeds {ECE_CONCERN} AND a threshold "
+            f"ECE {calibration.get('expected_calibration_error')} exceeds the larger of {ECE_CONCERN} and its noise "
+            f"floor ({calibration.get('ece_noise_floor')}) AND a threshold "
             f"({operating_point.get('threshold')}) was tuned on those probabilities — run calibrate_model, then "
             "re-run tune_threshold",
         )

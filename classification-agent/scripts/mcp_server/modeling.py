@@ -758,6 +758,9 @@ def tune_threshold(
         # report and into the exported bundle, not lose it at the first hop.
         "calibration_caveat": calibration_caveat,
     }
+    # A fairness verdict judges decisions; measured at the previous cutoff it
+    # judged a rule that no longer ships. Cleared so the gate asks for it again.
+    refair = meta.pop("fairness", None) is not None
     _save_meta(run_id, meta)
     return json.dumps(
         {
@@ -770,6 +773,7 @@ def tune_threshold(
                 {"calibration_caveat": calibration_caveat} if calibration_caveat else {}
             ),
             "default_0.5": meta["operating_point"]["default_0.5"],
+            **({"invalidated": "fairness — re-run assess_fairness at this threshold"} if refair else {}),
             "persisted": "this is now the run's operating point — export_model, predict, the report and the "
             "success gate all use it",
         }
@@ -849,8 +853,8 @@ def export_model(run_id: str, out_path: str = "", force: bool = False) -> str:
         return json.dumps(
             {
                 "error": "overfitting_warning is set for this run's current model "
-                f"(cv_to_test_gap={current_metrics.get('cv_to_test_gap')} > {core.OVERFIT_GAP_THRESHOLD}) "
-                "— CV score doesn't reflect the held-out test fold. Ask the user before exporting; "
+                f"(cv_to_test_gap={current_metrics.get('cv_to_test_gap')}: the CV score sits above the test score's 95% "
+                "interval) — CV score doesn't reflect the held-out test fold. Ask the user before exporting; "
                 "retry with force=true if they confirm.",
             }
         )
@@ -869,6 +873,9 @@ def export_model(run_id: str, out_path: str = "", force: bool = False) -> str:
             }
         )
     export_warning = None
+    # Everything else the pipeline rebuilds from raw columns; these need the
+    # entity's earlier rows, so the caller has to supply them.
+    upstream = [o for r in meta.get("feature_recipes") or [] if r["kind"] == "history" for o in r["outputs"]]
     if readiness["overall_status"] == "incomplete":
         export_warning = (
             "exported from an INCOMPLETE run — these required checks never ran: "
@@ -904,6 +911,7 @@ def export_model(run_id: str, out_path: str = "", force: bool = False) -> str:
             # up thresholding the other class.
             "positive_label": meta.get("positive_label"),
             "operating_point": operating_point,
+            "requires_upstream_columns": upstream,
             # Which registry version this is, so serving can stamp every
             # prediction with it — None if the run was never logged to MLflow.
             "registry": meta.get("registry"),
@@ -1008,6 +1016,16 @@ def export_model(run_id: str, out_path: str = "", force: bool = False) -> str:
                 "against what this model was actually trained on. This survives the run directory being swept."
             ),
             **({"warning": export_warning} if export_warning else {}),
+            **(
+                {
+                    "requires_upstream_columns": upstream,
+                    "upstream_note": "these entity-history features need each entity's earlier rows — the scoring "
+                    "caller must compute them (definitions in the report) and pass them as columns; every other "
+                    "engineered feature is rebuilt inside the model from raw columns",
+                }
+                if upstream
+                else {}
+            ),
         }
     )
 

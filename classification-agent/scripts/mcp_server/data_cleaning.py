@@ -498,6 +498,12 @@ def apply_datetime_features(run_id: str, columns: str) -> str:
     meta["datetime_features"] = sorted(
         set(meta.get("datetime_features") or []) | set(cols)
     )
+    for col in [c for c in cols if f"{c}_month" in train.columns]:
+        parts = (["year"] if col != time_key else []) + ["month", "day", "dayofweek", "hour"]
+        meta.setdefault("feature_recipes", []).append({
+            "kind": "datetime", "column": col, "outputs": [f"{col}_{p}" for p in parts],
+            "drop_source": col != time_key,
+        })
     _save_meta(run_id, meta)
     return json.dumps(
         {"run_id": run_id, "decomposed_columns": cols, "train_shape": train.shape}
@@ -638,6 +644,10 @@ def apply_frequency_encoding(run_id: str, columns: str) -> str:
         for df in (train, test):
             df[f"{col}_freq"] = df[col].map(freq).fillna(0.0)
             df.drop(columns=[col], inplace=True)
+        meta.setdefault("feature_recipes", []).append({
+            "kind": "frequency", "column": col, "outputs": [f"{col}_freq"],
+            "map": [[k.item() if hasattr(k, "item") else k, float(v)] for k, v in freq.items()],
+        })
         encoded[col] = {
             "distinct_values_in_train": int(freq.shape[0]),
             "new_column": f"{col}_freq",

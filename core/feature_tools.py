@@ -19,6 +19,7 @@ import pandas as pd
 from . import runtime, toolguard
 from .datasource import read_table
 from .validation import _parse_dates as parse_dates
+from .validation import split_keys
 
 _store: dict = {}
 
@@ -81,8 +82,11 @@ def propose_features(run_id: str, top_k: int = 5) -> str:
     HITL unlike imputation)."""
     train, _, meta = _load_split(run_id)
     target = meta["target"]
+    # Split keys (entity id, time) and dropped columns never reach the model,
+    # so a ratio built on one is a customer-id feature by another name.
+    excluded = [target, *split_keys(meta), *(meta.get("dropped_columns") or {})]
     numeric = train.select_dtypes(include="number").drop(
-        columns=[target], errors="ignore"
+        columns=excluded, errors="ignore"
     )
     if numeric.empty:
         return json.dumps(
@@ -159,6 +163,12 @@ def apply_features(run_id: str, features: str) -> str:
         for name in added
     }
     meta["engineered_features"] = {**_reasoned_features(meta), **formulas}
+    # Replayed by the pipeline's FeatureRecipes step, so the exported model
+    # rebuilds these from raw columns instead of expecting them in new data.
+    for name in added:
+        a, op, b = name.partition("_div_") if "_div_" in name else name.partition("_times_")
+        expr = f"{_eval_safe(a)} / ({_eval_safe(b)} + 1e-6)" if op == "_div_" else f"{_eval_safe(a)} * {_eval_safe(b)}"
+        meta.setdefault("feature_recipes", []).append({"kind": "expr", "outputs": [name], "expression": expr})
     _save_meta(run_id, meta)
     return json.dumps(
         {"run_id": run_id, "added_features": added, "train_shape": train.shape}
@@ -204,6 +214,7 @@ def apply_custom_feature(
         **_reasoned_features(meta),
         name: {"formula": expression, "rationale": rationale},
     }
+    meta.setdefault("feature_recipes", []).append({"kind": "expr", "outputs": [name], "expression": expression})
     _save_meta(run_id, meta)
     return json.dumps(
         {"run_id": run_id, "added_feature": name, "train_shape": train.shape}
@@ -799,6 +810,9 @@ def apply_entity_features(run_id: str, features: str) -> str:
     train.to_csv(_run_dir(run_id) / "train.csv", index=False)
     test.to_csv(_run_dir(run_id) / "test.csv", index=False)
     meta["engineered_features"] = {**_reasoned_features(meta), **formulas}
+    # Not rebuildable from one scoring row: the exported model names these as
+    # columns its caller must supply.
+    meta.setdefault("feature_recipes", []).append({"kind": "history", "outputs": list(formulas)})
     _save_meta(run_id, meta)
     return json.dumps(
         {
@@ -889,6 +903,12 @@ def apply_peer_features(run_id: str, features: str) -> str:
                 else (df[col] - fitted["mean"]) / (fitted["std"] + 1e-6)
             )
         unseen[name] = round(float((~test[by].isin(peers.index)).mean()) * 100, 2)
+        meta.setdefault("feature_recipes", []).append({
+            "kind": "peer", "outputs": [name], "column": col, "by": by, "stat": stat,
+            "stats": {s: [[k.item() if hasattr(k, "item") else k, float(v)] for k, v in peers[s].items()]
+                      for s in ("median", "mean", "std")},
+            "overall": {s: float(overall[s]) for s in ("median", "mean", "std")},
+        })
         formulas[name] = {
             "formula": f"{col} {'/ peer median' if stat == 'ratio' else 'z-score vs peers'} by {by} "
             f"(fitted on the training fold)",

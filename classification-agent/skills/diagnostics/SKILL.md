@@ -130,7 +130,11 @@ across groups" (precision/recall/F1 per value). This answers a different,
 narrower question: "does the model *treat* groups differently in a way a
 fairness/bias review would flag" — demographic parity difference,
 disparate impact ratio (the standard 80%/four-fifths rule), and an
-equal-opportunity (true-positive-rate) gap. Binary targets only. Call this
+equal-opportunity (true-positive-rate) gap, all measured at the threshold
+the model ships with. A gap is flagged only when it passes its threshold AND
+a chi-square test (p < 0.05) says it is bigger than chance; true-positive
+rates are compared only for groups with at least 10 actual positives.
+Binary targets only. Call this
 whenever the dataset has a column that is, or proxies, a protected
 attribute (gender, age band, region-as-proxy-for-ethnicity, etc.) relevant
 to the domain — check `meta["business_understanding"]["domain"]` (set by
@@ -180,8 +184,9 @@ mean what they say — Brier score plus expected calibration error (ECE), with
 the per-bin table behind it. Run it after training and **before**
 `tune_threshold`: every threshold mode reads precision/recall off the
 probability distribution, so tuning on uncalibrated scores picks a cutoff
-whose stated tradeoff isn't the one you get. ECE above 0.05 raises
-`miscalibration_warning`; the fix is `calibrate_model` (modeling skill),
+whose stated tradeoff isn't the one you get. ECE above the larger of 0.05
+and `ece_noise_floor` (what a perfectly calibrated model reaches on this many
+rows by chance) raises `miscalibration_warning`; the fix is `calibrate_model` (modeling skill),
 then re-run `check_calibration` and everything the refit invalidated.
 ECE is measured on out-of-fold predictions for the training fold, because it
 DECIDES whether and how to calibrate; the test fold's ECE is reported beside

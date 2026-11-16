@@ -21,6 +21,7 @@ from .core import (
     _build_pipeline,
     _cv_sample,
     _cv_scoring,
+    _decisions,
     _evaluate,
     _load_meta,
     _load_split,
@@ -272,10 +273,10 @@ def error_analysis(run_id: str, top_n: int = 10) -> str:
     pipeline = joblib.load(pipeline_path)
     _, test, meta = _load_split(run_id)
     X_test, y_test = test.drop(columns=[meta["target"]]), test[meta["target"]]
-    y_pred = pipeline.predict(X_test)
+    y_pred, cutoff = _decisions(pipeline, X_test, y_test, meta)
     wrong = y_pred != y_test.values
     if not wrong.any():
-        result = {"run_id": run_id, "n_errors": 0, "errors": []}
+        result = {"run_id": run_id, "n_errors": 0, "errors": [], "decided": cutoff}
         meta["error_analysis"] = result
         _save_meta(run_id, meta)
         return json.dumps(result)
@@ -289,6 +290,7 @@ def error_analysis(run_id: str, top_n: int = 10) -> str:
         rows = rows.sort_values("confidence", ascending=False)
     result = {
         "run_id": run_id,
+        "decided": cutoff,
         "n_errors": int(wrong.sum()),
         "error_rate": round(float(wrong.mean()), 4),
         "top_errors": rows.head(top_n).to_dict(orient="records"),
@@ -318,7 +320,7 @@ def analyze_segments(run_id: str, segment_column: str) -> str:
     if segment_column not in test.columns:
         return json.dumps({"error": f"no column '{segment_column}' in the test fold"})
     X_test, y_test = test.drop(columns=[meta["target"]]), test[meta["target"]]
-    y_pred = pipeline.predict(X_test)
+    y_pred, cutoff = _decisions(pipeline, X_test, y_test, meta)
 
     segments = {}
     for value, idx in test.groupby(segment_column).groups.items():
@@ -333,7 +335,7 @@ def analyze_segments(run_id: str, segment_column: str) -> str:
             y_test[mask], y_pred[mask], output_dict=True, zero_division=0
         )
         segments[str(value)] = {"n": int(mask.sum()), **report.get("weighted avg", {})}
-    result = {"run_id": run_id, "segment_column": segment_column, "segments": segments}
+    result = {"run_id": run_id, "segment_column": segment_column, "decided": cutoff, "segments": segments}
     # `or {}`, not setdefault: runs retrained before _invalidate_model_derived
     # switched to pop() still carry segment_analysis: null on disk.
     meta["segment_analysis"] = {
@@ -459,6 +461,11 @@ def check_calibration(run_id: str, n_bins: int = 10) -> str:
 
     brier = float(brier_score_loss(y_true, proba))
     ece, bins = _ece(y_true, proba, n_bins)
+    # ECE is never 0 on finite data, even for a perfectly calibrated model:
+    # on ~700 rows sampling noise alone reaches ~0.05. The bar is the larger
+    # of ECE_CONCERN and what perfect calibration shows at this size.
+    floor = _ece_noise_floor(proba, n_bins)
+    bar = max(ECE_CONCERN, floor)
 
     # A model that already went through calibrate_model is reported as such,
     # so "ECE 0.02" can't be mistaken for a raw model that happened to be good.
@@ -474,19 +481,30 @@ def check_calibration(run_id: str, n_bins: int = 10) -> str:
         "n_bins_populated": len(bins),
         "bins": bins,
         "calibrated_by": calibrated_by,
-        "miscalibration_warning": bool(ece > ECE_CONCERN),
+        "ece_noise_floor": round(floor, 4),
+        "miscalibration_warning": bool(ece > bar),
         "interpretation": (
-            f"ECE {ece:.4f} exceeds {ECE_CONCERN} — these probabilities are not trustworthy as probabilities. "
+            f"ECE {ece:.4f} exceeds {bar:.4f} (the larger of {ECE_CONCERN} and the 95th percentile a perfectly "
+            "calibrated model reaches on this many rows) — these probabilities are not trustworthy as probabilities. "
             "Call calibrate_model, then re-run tune_threshold: any threshold tuned on the current scores "
             "encodes a precision/recall tradeoff the stated objective didn't ask for."
-            if ece > ECE_CONCERN
-            else f"ECE {ece:.4f} is within {ECE_CONCERN} — predicted probabilities track observed frequencies closely "
+            if ece > bar
+            else f"ECE {ece:.4f} is within {bar:.4f} — predicted probabilities track observed frequencies closely "
             "enough to tune a threshold against."
         ),
     }
     meta["calibration"] = result
     _save_meta(run_id, meta)
     return json.dumps(result)
+
+
+def _ece_noise_floor(proba, n_bins: int, n_sims: int = 200) -> float:
+    """95th percentile of the ECE a PERFECTLY calibrated model shows on these
+    scores: labels drawn as Bernoulli(proba) and scored back against proba."""
+    rng = np.random.default_rng(42)
+    proba = np.asarray(proba, dtype=float)
+    sims = [_ece((rng.random(len(proba)) < proba).astype(int), proba, n_bins)[0] for _ in range(n_sims)]
+    return float(np.percentile(sims, 95))
 
 
 def _ece(y_true, proba, n_bins: int) -> tuple[float, list[dict]]:
@@ -517,6 +535,26 @@ def _ece(y_true, proba, n_bins: int) -> tuple[float, list[dict]]:
         )
 
     return float(ece), bins
+
+
+# Fewer actual positives than this in a group and its true-positive rate is
+# not compared: each row moves it by 1/n_positive.
+MIN_GROUP_POSITIVES = 10
+# A parity gap is flagged only when a chi-square test of independence between
+# group and decision rejects at this level — the threshold says how big a gap
+# matters, the test says whether the data can tell it from noise.
+FAIRNESS_ALPHA = 0.05
+
+
+def _chi2_p(rows: list[tuple[int, int]]) -> float | None:
+    """p-value that the yes/no split is the same in every group; None when
+    there is nothing to test (under 2 groups, or a column of zeros)."""
+    from scipy.stats import chi2_contingency
+
+    table = np.array(rows, dtype=float)
+    if len(table) < 2 or (table.sum(axis=0) == 0).any():
+        return None
+    return round(float(chi2_contingency(table)[1]), 4)
 
 
 @mcp.tool()
@@ -557,7 +595,7 @@ def assess_fairness(
             {"error": "fairness metrics here are defined for a binary target only"}
         )
     X_test = test.drop(columns=[target])
-    y_pred = pipeline.predict(X_test)
+    y_pred, cutoff = _decisions(pipeline, X_test, y_test, meta)
     pos_label = positive_label(meta, y_test)
 
     groups = {}
@@ -569,13 +607,18 @@ def assess_fairness(
             continue
         pred_positive = y_pred[mask] == pos_label
         actual_positive = y_test[mask].values == pos_label
+        n_pos = int(actual_positive.sum())
         groups[str(value)] = {
             "n": n,
             "insufficient_sample": False,
+            "n_positive": n_pos,
+            "selected": int(pred_positive.sum()),
+            "caught": int(pred_positive[actual_positive].sum()),
             "selection_rate": round(float(pred_positive.mean()), 4),
+            # A recall on 5 positives moves 0.2 per row — too few to compare.
             "true_positive_rate": (
                 round(float(pred_positive[actual_positive].mean()), 4)
-                if actual_positive.sum() > 0
+                if n_pos >= MIN_GROUP_POSITIVES
                 else None
             ),
         }
@@ -602,22 +645,36 @@ def assess_fairness(
             if len(tprs) >= 2
             else None
         )
+        # A gap only counts when it is bigger than chance: with four random
+        # groups of 150 rows, selection rates spread by ~0.1 on their own.
+        p_selection = _chi2_p([(v["selected"], v["n"] - v["selected"]) for v in eligible.values()])
+        p_tpr = _chi2_p([(v["caught"], v["n_positive"] - v["caught"])
+                         for v in eligible.values() if v["true_positive_rate"] is not None])
         metrics = {
             "demographic_parity_difference": dpd,
             "disparate_impact_ratio": dir_ratio,
             "equal_opportunity_difference": eod,
+            "selection_rate_p_value": p_selection,
+            "true_positive_rate_p_value": p_tpr,
         }
+        significant_selection = p_selection is not None and p_selection < FAIRNESS_ALPHA
         flags = {
-            "demographic_parity_concern": dpd > 0.1,
+            "demographic_parity_concern": dpd > 0.1 and significant_selection,
             "disparate_impact_concern": dir_ratio is not None
-            and dir_ratio < 0.8,  # standard 80% (4/5ths) rule
-            "equal_opportunity_concern": eod is not None and eod > 0.1,
+            and dir_ratio < 0.8  # standard 80% (4/5ths) rule
+            and significant_selection,
+            "equal_opportunity_concern": eod is not None and eod > 0.1
+            and p_tpr is not None and p_tpr < FAIRNESS_ALPHA,
         }
+        if eod is None:
+            note = (f"equal opportunity not compared: fewer than 2 groups have >= {MIN_GROUP_POSITIVES} actual "
+                    "positives in the test fold")
 
     result = {
         "run_id": run_id,
         "protected_attribute": protected_attribute,
         "positive_label": str(pos_label),
+        "decided": cutoff,
         "groups": groups,
         "metrics": metrics,
         "flags": flags,

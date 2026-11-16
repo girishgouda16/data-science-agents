@@ -160,6 +160,12 @@ def apply_datetime_features(run_id: str, columns: str) -> str:
     train.to_csv(_run_dir(run_id) / "train.csv", index=False)
     test.to_csv(_run_dir(run_id) / "test.csv", index=False)
     meta["datetime_features"] = sorted(set(meta.get("datetime_features") or []) | set(cols))
+    for col in [c for c in cols if f"{c}_month" in train.columns]:
+        parts = (["year"] if col != time_key else []) + ["month", "day", "dayofweek", "hour"]
+        meta.setdefault("feature_recipes", []).append({
+            "kind": "datetime", "column": col, "outputs": [f"{col}_{p}" for p in parts],
+            "drop_source": col != time_key,
+        })
     _save_meta(run_id, meta)
     return json.dumps({"run_id": run_id, "decomposed_columns": cols, "train_shape": train.shape})
 

@@ -166,3 +166,25 @@ def test_calibration_folds_respect_groups_and_survive_a_subsample_refit():
     calibrated = CalibratedClassifierCV(LogisticRegression(), cv=folds).fit(X, y)
     clone(calibrated).fit(X.iloc[:150], y.iloc[:150])  # would IndexError on a fixed fold list
     assert calibrated.predict_proba(X).shape == (300, 2)
+
+
+def test_decisions_use_the_shipped_threshold_only_while_it_is_current():
+    """Fairness, segments and error analysis judge the rule that ships: the
+    tuned cutoff on P(positive), and 0.5 again once a refit made it stale."""
+    import numpy as np
+    import pandas as pd
+    from sklearn.linear_model import LogisticRegression
+    from mcp_server.core import _decisions
+
+    X = pd.DataFrame({"x": np.linspace(-3, 3, 200)})
+    y = pd.Series(np.where(X["x"] > 2, "fraud", "legit"))
+    model = LogisticRegression().fit(X, y)
+    meta = {"positive_label": "fraud", "pipeline_version": 2,
+            "operating_point": {"threshold": 0.05, "pipeline_version": 2}}
+    shipped, note = _decisions(model, X, y, meta)
+    assert "shipped threshold 0.05" in note
+    proba = model.predict_proba(X)[:, 0]  # "fraud" sorts first
+    assert (shipped == "fraud").sum() == (proba >= 0.05).sum() > (model.predict(X) == "fraud").sum()
+    meta["pipeline_version"] = 3
+    stale, note = _decisions(model, X, y, meta)
+    assert "0.5 default" in note and (stale == model.predict(X)).all()

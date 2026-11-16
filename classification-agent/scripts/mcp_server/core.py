@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
-from pipeline_transformers import ColumnDropper, ColumnFiller, XGBLabelClassifier
+from pipeline_transformers import ColumnDropper, ColumnFiller, FeatureRecipes, XGBLabelClassifier
 from imblearn.pipeline import Pipeline
 from sklearn.pipeline import Pipeline as SkPipeline
 from mcp.server.fastmcp import FastMCP
@@ -554,6 +554,11 @@ def _build_pipeline(meta: dict, model: str, X_train: pd.DataFrame, y_train) -> P
     timestamp is either thousands of one-hot columns or a trend a tree cannot
     extrapolate past the training period."""
     steps = []
+    # First: rebuild engineered features from raw columns (no-op on the run's
+    # own train/test files, which already hold them) — so an exported model
+    # scores rows shaped like the original file, not like train.csv.
+    if meta.get("feature_recipes"):
+        steps.append(("features", FeatureRecipes(meta["feature_recipes"])))
     dropped = [*(meta.get("dropped_columns") or {}), *split_keys(meta)]
     if dropped:
         steps.append(("drop", ColumnDropper(dropped)))
@@ -671,6 +676,27 @@ def _binary_or_macro_auc(y_test, proba, classes, meta: dict | None = None) -> di
         return {}
 
 
+def _decisions(pipeline, X, y, meta: dict):
+    """(predicted labels, which cutoff made them) at the threshold the model
+    SHIPS with — export bundles the operating point and serving applies it —
+    whenever one is current for this pipeline; sklearn's 0.5 otherwise. Any
+    verdict on decisions (fairness, segments, errors, the confusion matrix)
+    must judge the deployed rule, not pipeline.predict()."""
+    op = meta.get("operating_point") or {}
+    classes = list(getattr(pipeline, "classes_", []))
+    if (
+        op.get("threshold") is not None
+        and op.get("pipeline_version") == meta.get("pipeline_version")
+        and len(classes) == 2
+        and hasattr(pipeline, "predict_proba")
+    ):
+        pos_idx = positive_index(meta, y=y, classes=classes)
+        proba = pipeline.predict_proba(X)[:, pos_idx]
+        y_pred = np.where(proba >= float(op["threshold"]), classes[pos_idx], classes[1 - pos_idx])
+        return y_pred, f"at the shipped threshold {op['threshold']} on P({classes[pos_idx]})"
+    return pipeline.predict(X), "at the 0.5 default (no current tuned operating point)"
+
+
 def _evaluate(pipeline: Pipeline, X_test, y_test, meta: dict | None = None) -> dict:
     y_pred = pipeline.predict(X_test)
     result = {
@@ -757,10 +783,13 @@ def _test_score_for(metric: str, test_eval: dict) -> float | None:
     )
 
 
-# ponytail: a flat threshold on the CV-vs-test gap, not a learned overfitting
-# detector — upgrade to a per-dataset-size threshold if this flags too many
-# false positives on small test folds.
+# Without an interval (multiclass), a flat threshold on the CV-vs-test gap.
 OVERFIT_GAP_THRESHOLD = 0.15
+# With one, the gap must clear this floor AND put the CV score above the test
+# score's 95% bootstrap interval: a 0.15 gap is noise on a 180-row fold and a
+# real problem on a 100k-row one, and the interval is what knows which.
+OVERFIT_MIN_GAP = 0.05
+_CI_KEY = {"average_precision": "pr_auc", "f1_weighted": "f1_weighted"}
 
 # Average gap between "the model says 80%" and "80% of those were positive".
 # Above this, a threshold tuned on these scores encodes a precision/recall
@@ -775,9 +804,14 @@ def _overfit_gate(
     """cv_to_test_gap = train-fold CV mean minus the held-out test score for
     the SAME metric. A large positive gap means the model looked good under CV
     but didn't generalize to the untouched test fold — the gate export_model
-    checks before letting a model out the door."""
+    checks before letting a model out the door. Flagged when the CV score is
+    above the test score's 95% interval by more than OVERFIT_MIN_GAP, or, with
+    no interval, when the gap exceeds OVERFIT_GAP_THRESHOLD."""
     test_score = _test_score_for(metric, test_eval)
     if test_score is None:
         return None, False
     gap = round(cv_mean - test_score, 4)
+    ci = (test_eval.get("ci") or {}).get(_CI_KEY.get(metric))
+    if ci:
+        return gap, gap > OVERFIT_MIN_GAP and cv_mean > ci[1]
     return gap, gap > OVERFIT_GAP_THRESHOLD

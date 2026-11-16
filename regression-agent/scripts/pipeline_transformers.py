@@ -44,3 +44,64 @@ class ColumnFiller(BaseEstimator, TransformerMixin):
             if col in X.columns:
                 X[col] = X[col].fillna(value)
         return X
+
+
+class FeatureRecipes(BaseEstimator, TransformerMixin):
+    """First pipeline step: rebuilds every engineered feature from raw
+    columns, in the order the run applied them, so an exported model scores
+    rows shaped like the ORIGINAL file. A recipe whose outputs are already
+    present (the run's own train/test files) is skipped, so training and
+    evaluation see exactly the values the run computed.
+
+    kinds: expr (pandas eval over columns), datetime (calendar parts),
+    frequency / peer (statistics fitted on the training fold, stored in the
+    recipe), history (needs the entity's earlier rows — cannot be rebuilt
+    from one row, so it must arrive as a column)."""
+
+    def __init__(self, recipes):
+        self.recipes = recipes
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        import pandas as _pd
+
+        X = X.copy()
+        for r in self.recipes:
+            if all(o in X.columns for o in r["outputs"]):
+                continue
+            kind = r["kind"]
+            if kind == "expr":
+                safe = {c: f"_{c}" for c in X.columns if str(c)[:1].isdigit()}
+                X[r["outputs"][0]] = X.rename(columns=safe).eval(r["expression"])
+            elif kind == "datetime":
+                raw = X[r["column"]]
+                parsed = _pd.to_datetime(raw, errors="coerce")
+                if parsed.isna().sum() > raw.isna().sum():
+                    parsed = _pd.to_datetime(raw, errors="coerce", format="mixed")
+                for out in r["outputs"]:
+                    part = out[len(r["column"]) + 1:]
+                    X[out] = getattr(parsed.dt, part)
+                if r.get("drop_source"):
+                    X = X.drop(columns=[r["column"]])
+            elif kind == "frequency":
+                X[r["outputs"][0]] = X[r["column"]].map(dict(r["map"])).fillna(0.0)
+                X = X.drop(columns=[r["column"]])
+            elif kind == "peer":
+                stats = {k: dict(v) for k, v in r["stats"].items()}
+                fitted = {s: X[r["by"]].map(stats[s]).fillna(r["overall"][s]) for s in ("median", "mean", "std")}
+                col = X[r["column"]]
+                X[r["outputs"][0]] = (
+                    col / (fitted["median"].abs() + 1e-6)
+                    if r["stat"] == "ratio"
+                    else (col - fitted["mean"]) / (fitted["std"] + 1e-6)
+                )
+            else:
+                missing = [o for o in r["outputs"] if o not in X.columns]
+                raise ValueError(
+                    f"columns {missing} are entity-history features ({kind}): they need the entity's earlier "
+                    "rows, which one scoring row does not carry — compute them upstream (same definition as "
+                    "the run's report) and pass them in as columns"
+                )
+        return X

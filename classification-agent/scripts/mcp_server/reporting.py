@@ -20,7 +20,7 @@ import json
 import joblib
 from sklearn.metrics import confusion_matrix, precision_recall_curve, roc_curve
 
-from .core import _load_meta, _load_split, _run_dir, positive_index, positive_label, mcp
+from .core import _decisions, _load_meta, _load_split, _run_dir, positive_index, positive_label, mcp
 from .data_cleaning import _reasoned_drops
 from .eda import detect_outliers, eda
 from .feat_engineering import _reasoned_features
@@ -891,29 +891,8 @@ def generate_report(run_id: str) -> str:
         pipeline = joblib.load(pipeline_path)
         X_test, y_test = test.drop(columns=[target]), test[target]
         labels = sorted(y_test.unique())
-        # At the threshold the model ships with (export bundles it, serving
-        # applies it) — the matrix a reviewer signs off must be the deployed
-        # decision rule, not pipeline.predict()'s 0.5.
-        op = meta.get("operating_point") or {}
-        if (
-            op.get("threshold") is not None
-            and op.get("pipeline_version") == meta.get("pipeline_version")
-            and len(labels) == 2
-            and hasattr(pipeline, "predict_proba")
-        ):
-            pos_idx = positive_index(meta, y=y_test)
-            positive, negative = (
-                pipeline.classes_[pos_idx],
-                pipeline.classes_[1 - pos_idx],
-            )
-            proba = pipeline.predict_proba(X_test)[:, pos_idx]
-            y_pred = [
-                positive if p >= float(op["threshold"]) else negative for p in proba
-            ]
-            cutoff = f"at the shipped threshold {op['threshold']} on P({positive})"
-        else:
-            y_pred = pipeline.predict(X_test)
-            cutoff = "at the 0.5 default (no current tuned operating point)"
+        # The matrix a reviewer signs off must be the deployed decision rule.
+        y_pred, cutoff = _decisions(pipeline, X_test, y_test, meta)
         cm = confusion_matrix(y_test, y_pred, labels=labels)
         lines[-3] = (
             f"## Confusion matrix\n\n{cutoff}; labels={[str(x) for x in labels]}\n```\n{cm.tolist()}\n```"

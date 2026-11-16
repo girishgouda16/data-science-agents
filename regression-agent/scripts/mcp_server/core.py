@@ -41,7 +41,7 @@ import pandas as pd
 
 import shap
 
-from pipeline_transformers import ColumnDropper, ColumnFiller
+from pipeline_transformers import ColumnDropper, ColumnFiller, FeatureRecipes
 
 from run_persistence import save_training_run
 
@@ -304,6 +304,11 @@ def _build_pipeline(meta: dict, model: str, X_train: pd.DataFrame) -> Pipeline:
     — train_model and tune_hyperparams both go through this, so a tuned
     refit and a baseline fit are structurally the same shape."""
     steps = []
+    # First: rebuild engineered features from raw columns (no-op on the run's
+    # own train/test files, which already hold them) — so an exported model
+    # scores rows shaped like the original file, not like train.csv.
+    if meta.get("feature_recipes"):
+        steps.append(("features", FeatureRecipes(meta["feature_recipes"])))
     # Split keys (entity id, time column) stay in the data for validation and
     # never reach the model: an id one-hot is a memorised-entity lookup, a raw
     # timestamp a trend no tree can extrapolate past the training period.
