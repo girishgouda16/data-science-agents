@@ -123,3 +123,46 @@ def test_ece_is_the_size_of_the_lie():
     ece = abs(proba.mean() - y.mean())
     assert round(ece, 4) == 0.4
     assert round(float(brier_score_loss(y, proba)), 4) == 0.41
+
+
+def test_pr_auc_selection_works_on_word_labels_and_scores_the_event():
+    """{"fraud","legit"} at 5% fraud: selection must use PR-AUC (it used to
+    fall back to f1_weighted for any non-0/1 labels) and score P(fraud), the
+    label that sorts FIRST — sklearn's stock scorer would use pos_label=1."""
+    import numpy as np
+    import pandas as pd
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import average_precision_score
+    from mcp_server.core import _cv_scoring, _scorer
+
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame({"x": rng.normal(size=400)})
+    y = pd.Series(np.where(X["x"] + rng.normal(size=400) > 2.3, "fraud", "legit"))
+    meta = {"positive_label": "fraud"}
+    assert _cv_scoring(y) == "average_precision"
+    model = LogisticRegression().fit(X, y)
+    expected = average_precision_score(y == "fraud", model.predict_proba(X)[:, 0])
+    assert abs(_scorer("average_precision", meta, y)(model, X, y) - expected) < 1e-9
+
+
+def test_calibration_folds_respect_groups_and_survive_a_subsample_refit():
+    """calibrate_model's folds must keep each entity on one side (a plain
+    cv=5 calibrated on an entity's own rows), and a clone refit on fewer
+    rows — what _validation_proba does — must recompute them, not index the
+    original rows."""
+    import numpy as np
+    import pandas as pd
+    from sklearn.base import clone
+    from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.linear_model import LogisticRegression
+    from pipeline_transformers import RunFolds
+
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame({"x": rng.normal(size=300), "cust": np.repeat(np.arange(60), 5)})
+    y = pd.Series((X["x"] + rng.normal(size=300) > 0).astype(int))
+    folds = RunFolds({"group_column": "cust"})
+    for fit, val in folds.split(X, y):
+        assert not set(X["cust"].iloc[fit]) & set(X["cust"].iloc[val])
+    calibrated = CalibratedClassifierCV(LogisticRegression(), cv=folds).fit(X, y)
+    clone(calibrated).fit(X.iloc[:150], y.iloc[:150])  # would IndexError on a fixed fold list
+    assert calibrated.predict_proba(X).shape == (300, 2)

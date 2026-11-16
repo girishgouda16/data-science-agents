@@ -27,6 +27,7 @@ from .core import (
     _run_dir,
     ECE_CONCERN,
     _save_meta,
+    _scorer,
     _validation_folds,
     _validation_proba,
     positive_index,
@@ -373,7 +374,7 @@ def check_model_stability(run_id: str, n_repeats: int = 3) -> str:
         pipeline = _build_pipeline(meta, model, X_cv, y_cv)
         cv, cv_scheme = _validation_folds(X_cv, y_cv, meta, seed=seed)
         scores.extend(
-            cross_val_score(pipeline, X_cv, y_cv, cv=cv, scoring=scoring).tolist()
+            cross_val_score(pipeline, X_cv, y_cv, cv=cv, scoring=_scorer(scoring, meta, y_cv)).tolist()
         )
     scores = np.array(scores)
     result = {

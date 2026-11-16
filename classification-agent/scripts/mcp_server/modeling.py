@@ -14,6 +14,7 @@ import optuna
 import pandas as pd
 from core import runtime, toolguard
 from core.datasource import read_table
+from pipeline_transformers import RunFolds
 import shap
 from run_persistence import save_training_run
 from sklearn.metrics import (
@@ -40,6 +41,7 @@ from .core import (
     _load_meta,
     _load_split,
     _overfit_gate,
+    _scorer,
     _run_dir,
     _save_meta,
     _invalidate_model_derived,
@@ -89,7 +91,7 @@ def compare_models(run_id: str, models: str = "") -> str:
     ranked = []
     for model in candidates:
         pipeline = _build_pipeline(meta, model, X_cv, y_cv)
-        scores = cross_val_score(pipeline, X_cv, y_cv, cv=cv, scoring=scoring)
+        scores = cross_val_score(pipeline, X_cv, y_cv, cv=cv, scoring=_scorer(scoring, meta, y_cv))
         ranked.append(
             {
                 "model": model,
@@ -139,7 +141,7 @@ def train_model(run_id: str, model: str = "random_forest") -> str:
     cv, cv_scheme = _validation_folds(X_cv, y_cv, meta)
     scoring = _cv_scoring(y_train)
     cv_scores = cross_val_score(
-        _build_pipeline(meta, model, X_cv, y_cv), X_cv, y_cv, cv=cv, scoring=scoring
+        _build_pipeline(meta, model, X_cv, y_cv), X_cv, y_cv, cv=cv, scoring=_scorer(scoring, meta, y_cv)
     )
 
     pipeline = _build_pipeline(meta, model, X_train, y_train)
@@ -193,7 +195,7 @@ def train_model(run_id: str, model: str = "random_forest") -> str:
 
 @mcp.tool()
 def tune_hyperparams(
-    run_id: str, model: str = "random_forest", n_trials: int = 8, cv_folds: int = 5
+    run_id: str, model: str = "", n_trials: int = 8, cv_folds: int = 5
 ) -> str:
     """Optuna TPE search over the SAME pipeline shape as train_model — TPE
     picks each next candidate from the trials so far instead of sampling
@@ -204,12 +206,14 @@ def tune_hyperparams(
     and OVERWRITES this run's pipeline — every tool that reads "the current
     model" for this run_id (explain_model, export_model, the visualization
     agent's plots) picks up the tuned version automatically. Nothing needs
-    best_params handed to it manually."""
+    best_params handed to it manually. model: empty = the run's current
+    model (what train_model fitted), so tuning never silently swaps family."""
+    train, test, meta = _load_split(run_id)
+    model = model or meta.get("model") or "random_forest"
     if model not in MODELS:
         return json.dumps(
             {"error": f"unknown model '{model}', use one of {list(MODELS)}"}
         )
-    train, test, meta = _load_split(run_id)
     target = meta["target"]
     X_train, y_train = train.drop(columns=[target]), train[target]
     X_test, y_test = test.drop(columns=[target]), test[target]
@@ -228,7 +232,7 @@ def tune_hyperparams(
         }
         pipeline = _build_pipeline(meta, model, X_cv, y_cv)
         pipeline.set_params(**params)
-        return cross_val_score(pipeline, X_cv, y_cv, cv=cv, scoring=scoring).mean()
+        return cross_val_score(pipeline, X_cv, y_cv, cv=cv, scoring=_scorer(scoring, meta, y_cv)).mean()
 
     study = optuna.create_study(
         direction="maximize", sampler=optuna.samplers.TPESampler(seed=42)
@@ -351,10 +355,16 @@ def calibrate_model(run_id: str, method: str = "isotonic", cv_folds: int = 5) ->
     if meta.get("best_params"):
         base.set_params(**meta["best_params"])
 
-    # cv=cv_folds refits the base pipeline per fold and fits the calibrator on
-    # each held-out part — the calibration map never sees rows the model it is
+    # Refits the base pipeline per fold and fits the calibrator on each
+    # held-out part — the calibration map never sees rows the model it is
     # calibrating was fitted on, which is the whole point. Test fold untouched.
-    calibrated = CalibratedClassifierCV(base, method=method, cv=cv_folds)
+    # RunFolds, not cv=int: an int means plain StratifiedKFold, which on an
+    # entity or temporal run calibrates on an entity's own rows or on the past
+    # predicted from the future. RunFolds recomputes the run's folds on
+    # whatever rows it gets, so a clone refit on a subsample stays correct.
+    calibrated = CalibratedClassifierCV(
+        base, method=method, cv=RunFolds(meta, n_splits=cv_folds)
+    )
     calibrated.fit(X_train, y_train)
     test_eval = _evaluate(calibrated, X_test, y_test, meta)
 
@@ -525,14 +535,20 @@ def explain_model(
         _save_meta(run_id, meta)
         return json.dumps(explain_result)
 
+    # Scored on the run's selection metric, not .score()'s accuracy: at a 2%
+    # positive rate shuffling any column barely moves accuracy, so every
+    # importance lands near zero and the ranking is noise.
+    scored_by = _cv_scoring(y_test)
     result = permutation_importance(
-        pipeline, X_test, y_test, n_repeats=5, random_state=42
+        pipeline, X_test, y_test, n_repeats=5, random_state=42,
+        scoring=_scorer(scored_by, meta, y_test),
     )
     importances = sorted(
         zip(X_test.columns, result.importances_mean.round(4)), key=lambda kv: -kv[1]
     )
     explain_result = {
         "method": "permutation",
+        "scored_by": scored_by,
         "model": meta["model"],
         "feature_importance": [[f, float(v)] for f, v in importances[:10]],
     }

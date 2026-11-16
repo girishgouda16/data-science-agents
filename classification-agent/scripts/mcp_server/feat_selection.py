@@ -12,7 +12,7 @@ import numpy as np
 from sklearn.base import clone
 from sklearn.inspection import permutation_importance
 
-from .core import _cv_sample, _load_split, _run_dir, _validation_folds, mcp, split_keys
+from .core import _cv_sample, _cv_scoring, _load_split, _run_dir, _scorer, _validation_folds, mcp, split_keys
 
 
 @mcp.tool()
@@ -39,12 +39,17 @@ def propose_feature_selection(run_id: str, bottom_k: int = 3) -> str:
     X, y, _ = _cv_sample(train.drop(columns=[meta["target"]]), train[meta["target"]], meta)
     X, y = X.reset_index(drop=True), y.reset_index(drop=True)
     folds, scheme = _validation_folds(X, y, meta)
+    # The run's selection metric, not .score()'s accuracy — on a rare positive
+    # class accuracy-based importance is ~0 everywhere and this would propose
+    # dropping real signal.
+    scoring = _scorer(_cv_scoring(y), meta, y)
     per_fold = []
     for fit_idx, val_idx in folds:
         model = clone(pipeline).fit(X.iloc[fit_idx], y.iloc[fit_idx])
         per_fold.append(
             permutation_importance(
-                model, X.iloc[val_idx], y.iloc[val_idx], n_repeats=3, random_state=42
+                model, X.iloc[val_idx], y.iloc[val_idx], n_repeats=3, random_state=42,
+                scoring=scoring,
             ).importances_mean
         )
     # The split keys never reach the model, so their importance is exactly 0 —

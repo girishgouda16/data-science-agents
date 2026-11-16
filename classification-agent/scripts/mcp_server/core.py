@@ -32,6 +32,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
     classification_report,
+    make_scorer,
     roc_auc_score,
 )
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -715,16 +716,31 @@ def _cv_scoring(y) -> str:
     written for. Selecting on one metric and reporting on another is how a
     run ends up shipping the model that scored best at doing nothing.
 
-    Restricted to 0/1-labelled targets because sklearn's average_precision
-    scorer assumes pos_label=1; anything else falls back rather than erroring.
+    Any binary labels qualify ({"fraud","legit"} as much as {0,1}): pass the
+    name through _scorer() before handing it to sklearn, which binds it to the
+    run's positive class.
     """
-    if y.nunique() != 2 or set(pd.unique(y)) - {0, 1}:
+    if y.nunique() != 2:
         return "f1_weighted"
     counts = y.value_counts()
     return (
         "average_precision"
         if float(counts.min() / counts.max()) < IMBALANCED_RATIO
         else "f1_weighted"
+    )
+
+
+def _scorer(metric: str, meta: dict, y):
+    """A _cv_scoring() name -> what sklearn's `scoring=` takes. sklearn's
+    built-in "average_precision" scores pos_label=1, which is no label at all
+    on a {"fraud","legit"} target and the wrong class when the positive label
+    sorts first, so bind it to the run's positive class."""
+    if metric != "average_precision":
+        return metric
+    return make_scorer(
+        average_precision_score,
+        response_method="predict_proba",
+        pos_label=_to_native(positive_label(meta, y)),
     )
 
 

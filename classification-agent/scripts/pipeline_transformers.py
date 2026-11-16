@@ -77,3 +77,25 @@ try:
             return self.labels_[_np.asarray(super().predict(X, **kwargs)).astype(int)]
 except ImportError:  # xgboost is optional where only exported non-xgboost models are loaded
     pass
+
+
+class RunFolds:
+    """CV splitter for classification's calibrate_model: the run's own folds
+    (forward-chained, grouped or stratified — core/validation.py), recomputed
+    on whatever rows it is handed. Passed as CalibratedClassifierCV(cv=...)
+    so the calibrator never learns from an entity's own rows or from the
+    future, and a clone refit on a subsample still gets valid folds. It ends
+    up inside the pickled model, so loaders need the class; split() only runs
+    during fit, never at predict time."""
+
+    def __init__(self, meta, n_splits=5):
+        self.meta = {k: meta.get(k) for k in ("time_column", "group_column")}
+        self.n_splits = n_splits
+
+    def split(self, X, y=None, groups=None):
+        from core.validation import validation_folds
+
+        return iter(validation_folds(X, y, self.meta, self.n_splits)[0])
+
+    def get_n_splits(self, X=None, y=None, groups=None):
+        return self.n_splits if X is None else len(list(self.split(X, y)))
