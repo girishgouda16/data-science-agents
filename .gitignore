@@ -74,3 +74,4 @@ docs/*
 */scripts/test_artifacts/*.monitoring.json
 */scripts/test_artifacts/*.reference.csv
 */scripts/test_artifacts/*.sha256.json
+*/scripts/test_artifacts/last_run_ids.json
