@@ -10,6 +10,9 @@ interface ComposerProps {
 }
 
 const MB = 1024 * 1024;
+// Mirrors core/datasource.py DATA_SUFFIXES; the gateway checks the content.
+const DATA_FILES =
+  ".csv,.tsv,.txt,.parquet,.pq,.feather,.arrow,.json,.jsonl,.ndjson,.xlsx,.xls,.gz,.bz2,.xz,.zst,.tar,.tgz,.zip";
 
 export function Composer({ onSend, disabled, isNewChat, placeholder }: ComposerProps) {
   const { draft, setDraft, project, setProject, autopilot, setAutopilot } = useSessions();
@@ -43,10 +46,6 @@ export function Composer({ onSend, disabled, isNewChat, placeholder }: ComposerP
   };
 
   const uploadFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      setUpload({ busy: false, error: "Only CSV files can be uploaded." });
-      return;
-    }
     setUpload({ busy: true, error: null });
     try {
       const { file_path } = await api.uploadDataset(file);
@@ -111,8 +110,8 @@ export function Composer({ onSend, disabled, isNewChat, placeholder }: ComposerP
               className="icon-btn"
               onClick={() => fileInputRef.current?.click()}
               disabled={upload.busy || disabled}
-              title="Attach a CSV dataset"
-              aria-label="Attach a CSV dataset"
+              title="Attach a dataset"
+              aria-label="Attach a dataset"
             >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                 <path
@@ -121,7 +120,7 @@ export function Composer({ onSend, disabled, isNewChat, placeholder }: ComposerP
                 />
               </svg>
             </button>
-            <input ref={fileInputRef} type="file" accept=".csv,text/csv" hidden onChange={onFileChosen} />
+            <input ref={fileInputRef} type="file" accept={DATA_FILES} hidden onChange={onFileChosen} />
             {isNewChat && (
               <label className="tool-chip project-field" title="Models from this chat register under this team project">
                 Project
@@ -160,7 +159,7 @@ export function Composer({ onSend, disabled, isNewChat, placeholder }: ComposerP
             </button>
           </div>
         </div>
-        {dragging && <div className="drop-hint">Drop the CSV to attach it</div>}
+        {dragging && <div className="drop-hint">Drop the file to attach it</div>}
       </div>
     </div>
   );
