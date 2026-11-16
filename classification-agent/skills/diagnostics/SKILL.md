@@ -148,7 +148,9 @@ ratio math, not silently averaged in — say so plainly rather than reporting
 a number with no real support. This is a screening tool, not a legal
 certification; a flagged `disparate_impact_concern` or
 `equal_opportunity_concern` is a stop-and-ask signal in `modeling`'s
-autonomous mode, same tier as an overfitting or leakage warning. If no
+autonomous mode, same tier as an overfitting or leakage warning, and it
+fails the `fairness_assessed` readiness gate: export and promotion refuse
+the run until a person forces it with a recorded reason. If no
 column in the dataset is a plausible protected attribute, skip this tool
 and say so in the reflection step below (`fairness_assessment_status:
 not_applicable`) — don't force a fairness check onto a dataset that has no

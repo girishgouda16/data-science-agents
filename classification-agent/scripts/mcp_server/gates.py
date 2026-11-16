@@ -571,14 +571,17 @@ def compute_readiness(run_id: str) -> dict:
     fairness_na = meta.get("fairness_not_applicable")
     if fairness:
         flags = [k for k, v in (fairness.get("flags") or {}).items() if v]
-        checks["fairness_assessed"] = _gate(
-            PASS,
-            f"assess_fairness ran on `{fairness['protected_attribute']}`"
-            + (
-                f" — flagged {flags} (surfaced, not silently passed)"
-                if flags
-                else " — no flags at configured thresholds"
-            ),
+        checks["fairness_assessed"] = (
+            _gate(
+                FAIL,
+                f"assess_fairness on `{fairness['protected_attribute']}` flagged {flags} — "
+                "export and promotion need force=true from a person who has seen the flags",
+            )
+            if flags
+            else _gate(
+                PASS,
+                f"assess_fairness ran on `{fairness['protected_attribute']}` — no flags at configured thresholds",
+            )
         )
     elif fairness_na:
         checks["fairness_assessed"] = _gate(

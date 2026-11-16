@@ -627,6 +627,22 @@ def decisions_never_read_the_test_fold() -> None:
 
 
 # --------------------------------------------------------------------------
+# A flagged fairness screen blocks; a clean one passes.
+# --------------------------------------------------------------------------
+def fairness_flag_blocks() -> None:
+    run_id = json.loads(m.prepare_dataset(_csv(_frame(), "fairness"), "label"))["run_id"]
+    for flagged, expected in ((True, "fail"), (False, "pass")):
+        meta = m._load_meta(run_id)
+        meta["fairness"] = {"protected_attribute": "region",
+                            "flags": {"disparate_impact_concern": flagged}}
+        m._save_meta(run_id, meta)
+        status = json.loads(m.check_readiness(run_id))["checks"]["fairness_assessed"]["status"]
+        assert status == expected, f"flagged={flagged}: got {status}"
+    shutil.rmtree(m._run_dir(run_id))
+    print("  fairness_flag_blocks: a flagged screen fails the gate")
+
+
+# --------------------------------------------------------------------------
 # 11. The success verdict is judged on the interval, not the point.
 # --------------------------------------------------------------------------
 def success_verdict_uses_the_interval() -> None:
@@ -755,6 +771,7 @@ def main() -> None:
     baseline_gate_uses_imbalance_aware_metric()
     decisions_never_read_the_test_fold()
     success_verdict_uses_the_interval()
+    fairness_flag_blocks()
     near_perfect_predictor_and_duplicates()
     standard_diagnostics_is_one_ordered_call()
     print("all gate checks passed")
