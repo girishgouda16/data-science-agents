@@ -118,6 +118,87 @@ def read_table(path) -> pd.DataFrame:
     return _read_one(name, name)
 
 
+# ---- Run storage: a run keeps the format its input arrived in -------------
+#
+# A Parquet input is split and stored as train.parquet/test.parquet (types,
+# leading zeros and exact floats survive); anything else as CSV. Readers ask
+# for a fold by name and get whichever exists, so runs written before this
+# (CSV) keep working.
+PARQUET_SUFFIXES = (".parquet", ".pq")
+
+
+def storage_format(source) -> str:
+    """"parquet" for a Parquet input (also inside .gz), else "csv"."""
+    name = str(source).lower()
+    for ext in _COMPRESSED:
+        name = name.removesuffix(ext)
+    return "parquet" if name.endswith(PARQUET_SUFFIXES) else "csv"
+
+
+def fold_path(run_dir, name: str) -> Path:
+    """The run's `name` fold (train/test) in whichever format it was stored."""
+    for fmt in ("parquet", "csv"):
+        path = Path(run_dir) / f"{name}.{fmt}"
+        if path.exists():
+            return path
+    return Path(run_dir) / f"{name}.csv"
+
+
+def _plain(df: pd.DataFrame) -> pd.DataFrame:
+    """Parquet keeps pandas extension dtypes; the pipeline was built on what a
+    CSV yields. Categories and nullable strings become object, nullable
+    numbers/booleans become float (NA -> NaN). Datetimes stay datetimes."""
+    for col in df.columns:
+        dtype = df[col].dtype
+        if isinstance(dtype, pd.CategoricalDtype) or pd.api.types.is_string_dtype(dtype) and dtype != object:
+            df[col] = df[col].astype(object).where(df[col].notna(), None)
+        elif isinstance(dtype, pd.api.extensions.ExtensionDtype) and (
+            pd.api.types.is_numeric_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
+        ):
+            df[col] = df[col].astype("float64")
+    return df
+
+
+def read_frame(path) -> pd.DataFrame:
+    """A file this package wrote (a fold, a reference snapshot, predictions)."""
+    path = Path(path)
+    return _plain(pd.read_parquet(path)) if path.suffix in PARQUET_SUFFIXES else pd.read_csv(path)
+
+
+def write_frame(df: pd.DataFrame, path) -> Path:
+    path = Path(path)
+    if path.suffix in PARQUET_SUFFIXES:
+        try:
+            df.to_parquet(path, index=False)
+        except (TypeError, ValueError, ImportError) as e:
+            if isinstance(e, ImportError):
+                raise
+            # An object column mixing types (a number imputed into a text
+            # column) has no Arrow type; store its values as text, which is
+            # what a CSV round trip would have done anyway.
+            df = df.copy()
+            for col in df.columns[df.dtypes == object]:
+                df[col] = df[col].map(lambda v: v if v is None or v != v else str(v))
+            df.to_parquet(path, index=False)
+    else:
+        df.to_csv(path, index=False)
+    return path
+
+
+def read_fold(run_dir, name: str) -> pd.DataFrame:
+    return read_frame(fold_path(run_dir, name))
+
+
+def write_fold(df: pd.DataFrame, run_dir, name: str, fmt: str = "csv") -> Path:
+    """Writes `name.<fmt>` and removes the other format's copy, so a reader
+    never picks up a stale fold."""
+    path = write_frame(df, Path(run_dir) / f"{name}.{fmt}")
+    for other in ("parquet", "csv"):
+        if other != fmt:
+            (Path(run_dir) / f"{name}.{other}").unlink(missing_ok=True)
+    return path
+
+
 def configured_sources() -> list[str]:
     """Every named source the environment defines — names only, never URLs."""
     return sorted(f"{kind}:{key[len(prefix):].lower()}" for kind, prefix in SOURCE_KINDS.items()

@@ -44,6 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root, for c
 from core import runtime  # noqa: E402 — who is asking; run ownership
 from core import validation as shared_validation  # noqa: E402
 from core import toolguard  # noqa: E402
+from core.datasource import read_fold, write_fold  # noqa: E402
 
 toolguard.install(
     mcp
@@ -259,9 +260,17 @@ def _save_meta(run_id: str, meta: dict) -> None:
 
 def _load_split(run_id: str) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     meta = _load_meta(run_id)
-    train = pd.read_csv(_run_dir(run_id) / "train.csv")
-    test = pd.read_csv(_run_dir(run_id) / "test.csv")
+    train = read_fold(_run_dir(run_id), "train")
+    test = read_fold(_run_dir(run_id), "test")
     return train, test, meta
+
+
+def _save_split(run_id: str, train: pd.DataFrame, test: pd.DataFrame, meta: dict) -> None:
+    """Writes both folds in the run's storage format (Parquet when the input
+    was Parquet, CSV otherwise)."""
+    fmt = meta.get("storage_format", "csv")
+    write_fold(train, _run_dir(run_id), "train", fmt)
+    write_fold(test, _run_dir(run_id), "test", fmt)
 
 
 # ponytail: flat row cap, not adaptive to compute budget or model type — a

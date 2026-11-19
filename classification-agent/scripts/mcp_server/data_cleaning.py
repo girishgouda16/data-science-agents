@@ -13,6 +13,7 @@ from .core import (
     _load_split,
     _run_dir,
     _save_meta,
+    _save_split,
     _to_native,
     mcp,
     parse_dates,
@@ -89,8 +90,7 @@ def apply_imputation(run_id: str, strategies: str) -> str:
         meta["dropped_columns"] = {**_reasoned_drops(meta), **reasons}
 
     meta["imputation"] = {**meta["imputation"], **values}
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_split(run_id, train, test, meta)
     _save_meta(run_id, meta)
     return json.dumps(
         {
@@ -430,8 +430,7 @@ def apply_drop_columns(run_id: str, columns: str) -> str:
         c: reasons_available.get(c, "dropped by explicit user request") for c in cols
     }
     meta["dropped_columns"] = {**_reasoned_drops(meta), **new_reasons}
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_split(run_id, train, test, meta)
     _save_meta(run_id, meta)
     return json.dumps(
         {"run_id": run_id, "dropped_columns": cols, "train_shape": train.shape,
@@ -493,8 +492,7 @@ def apply_datetime_features(run_id: str, columns: str) -> str:
             df[f"{col}_hour"] = parsed.dt.hour
             if col != time_key:
                 df.drop(columns=[col], inplace=True)
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_split(run_id, train, test, meta)
     meta["datetime_features"] = sorted(
         set(meta.get("datetime_features") or []) | set(cols)
     )
@@ -653,8 +651,7 @@ def apply_frequency_encoding(run_id: str, columns: str) -> str:
             "new_column": f"{col}_freq",
             "test_rows_with_unseen_value_pct": round(unseen, 2),
         }
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_split(run_id, train, test, meta)
     meta["frequency_encoded"] = {**(meta.get("frequency_encoded") or {}), **encoded}
     _save_meta(run_id, meta)
     return json.dumps(

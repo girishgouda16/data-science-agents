@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from . import runtime, toolguard
-from .datasource import read_table
+from .datasource import read_table, write_fold
 from .validation import _parse_dates as parse_dates
 from .validation import split_keys
 
@@ -41,6 +41,13 @@ def _run_dir(run_id):
 
 def _save_meta(run_id, meta):
     return _store["save_meta"](run_id, meta)
+
+
+def _save_folds(run_id, train, test, meta) -> None:
+    """In the run's storage format — Parquet when its input was Parquet."""
+    fmt = meta.get("storage_format", "csv")
+    write_fold(train, _run_dir(run_id), "train", fmt)
+    write_fold(test, _run_dir(run_id), "test", fmt)
 
 
 def _eval_safe(col) -> str:
@@ -150,8 +157,7 @@ def apply_features(run_id: str, features: str) -> str:
                 a, b = name.split("_times_")
                 df[name] = df[a] * df[b]
         added = names
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_folds(run_id, train, test, meta)
     formulas = {
         name: {
             "formula": proposals[name]["formula"],
@@ -208,8 +214,7 @@ def apply_custom_feature(
             df[name] = df.rename(columns=_eval_safe).eval(expression)
     except Exception as e:
         return json.dumps({"error": f"expression failed: {e}"})
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_folds(run_id, train, test, meta)
     meta["engineered_features"] = {
         **_reasoned_features(meta),
         name: {"formula": expression, "rationale": rationale},
@@ -807,8 +812,7 @@ def apply_entity_features(run_id: str, features: str) -> str:
     helpers = ["_fold", "_pos", "_t"]
     train = both[both["_fold"] == 0].drop(columns=helpers)
     test = both[both["_fold"] == 1].drop(columns=helpers)
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_folds(run_id, train, test, meta)
     meta["engineered_features"] = {**_reasoned_features(meta), **formulas}
     # Not rebuildable from one scoring row: the exported model names these as
     # columns its caller must supply.
@@ -914,8 +918,7 @@ def apply_peer_features(run_id: str, features: str) -> str:
             f"(fitted on the training fold)",
             "rationale": spec.get("rationale", ""),
         }
-    train.to_csv(_run_dir(run_id) / "train.csv", index=False)
-    test.to_csv(_run_dir(run_id) / "test.csv", index=False)
+    _save_folds(run_id, train, test, meta)
     meta["engineered_features"] = {**_reasoned_features(meta), **formulas}
     _save_meta(run_id, meta)
     return json.dumps(

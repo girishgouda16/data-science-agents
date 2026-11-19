@@ -87,6 +87,7 @@ from core import (
 
 mcp = FastMCP("visualization-agent")
 from core import toolguard  # noqa: E402
+from core.datasource import read_fold  # noqa: E402
 
 toolguard.install(
     mcp, outputs=False
@@ -146,7 +147,7 @@ def _load_run(run_id: str):
     ):  # another user's run reads as absent — checked before unpickling it
         return None
     pipeline = joblib.load(pipeline_path)
-    test = pd.read_csv(RUNS_DIR / run_id / "test.csv")
+    test = read_fold(RUNS_DIR / run_id, "test")  # Parquet or CSV, as the run stored it
     return pipeline, meta, test
 
 

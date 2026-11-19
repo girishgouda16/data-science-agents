@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 from core import data_tools
-from core.datasource import read_table
+from core.datasource import read_table, storage_format, write_fold
 from scipy import stats
 from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 
@@ -329,8 +329,10 @@ def prepare_dataset(
     run_id = str(uuid.uuid4())
     run_dir = _run_dir(run_id)
     run_dir.mkdir(parents=True)
-    train.to_csv(run_dir / "train.csv", index=False)
-    test.to_csv(run_dir / "test.csv", index=False)
+    # The run keeps its input's format: Parquet in, Parquet folds.
+    fmt = storage_format(path)
+    write_fold(train, run_dir, "train", fmt)
+    test_file = write_fold(test, run_dir, "test", fmt)
     labels = sorted(pd.unique(df[target].dropna()))
     if positive_label:
         matched = [l for l in labels if str(l) == positive_label]
@@ -363,7 +365,8 @@ def prepare_dataset(
         # fold its numbers come from — two runs are only comparable on test
         # when these fingerprints match.
         "source_sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
-        "test_sha256": hashlib.sha256((run_dir / "test.csv").read_bytes()).hexdigest(),
+        "test_sha256": hashlib.sha256(test_file.read_bytes()).hexdigest(),
+        "storage_format": fmt,
         "dropped_columns": {},
         "imputation": {},
         "use_smote": False,

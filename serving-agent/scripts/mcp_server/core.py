@@ -44,6 +44,7 @@ from pipeline_transformers import ForecastModel, PanelForecastModel
 mcp = FastMCP("serving-agent")
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root, for core.*
 from core import toolguard  # noqa: E402
+from core.datasource import storage_format, write_frame  # noqa: E402
 
 toolguard.install(
     mcp
@@ -263,8 +264,8 @@ def _predict_sklearn(
         out["needs_review"] = needs_review
         review_count = int(needs_review.sum())
         if review_count:
-            review_file = data_file.with_name(f"{data_file.stem}_review_queue.csv")
-            out[needs_review].to_csv(review_file, index=False)
+            review_file = data_file.with_name(f"{data_file.stem}_review_queue.{storage_format(data_file)}")
+            write_frame(out[needs_review], review_file)
 
     # Every row says which model produced it — a prediction you can't trace
     # back to a model version can't be audited, rolled back, or monitored.
@@ -275,9 +276,11 @@ def _predict_sklearn(
     out_file = (
         Path(out_path)
         if out_path
-        else data_file.with_name(f"{data_file.stem}_predictions.csv")
+        else data_file.with_name(f"{data_file.stem}_predictions.{storage_format(data_file)}")
     )
-    out.to_csv(out_file, index=False)
+    # Same format as the input batch; the predictions LOG below stays CSV
+    # because it is appended to batch after batch.
+    write_frame(out, out_file)
 
     # Append to the model's predictions log. Aligned to the existing header,
     # so a batch with extra/missing raw columns can't shift the columns.
@@ -318,7 +321,8 @@ def _predict_sklearn(
         "prediction_summary": (
             prediction_series.describe().round(4).to_dict() if continuous else None
         ),
-        "preview": out.head(5).to_dict(orient="records"),
+        # pandas' own encoder: Parquet input carries Timestamps and pd.NA.
+        "preview": json.loads(out.head(5).to_json(orient="records", date_format="iso")),
     }
     if "confidence" in out.columns:
         response["confidence_note"] = (

@@ -22,7 +22,7 @@ Two questions, and the split between them is the reason this agent exists.
   training agent.
 
 Everything local explanation needs already travels with the export bundle:
-the training fold as `<model>.reference.csv` (the SHAP background), plus
+the training fold as `<model>.reference.csv` or `.reference.parquet` (the SHAP background), plus
 `positive_label` and `operating_point` in the bundle and the
 `<model>.monitoring.json` profile. No new contract.
 
@@ -65,6 +65,7 @@ from pipeline_transformers import (
 mcp = FastMCP("explain-agent")
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root, for core.*
 from core import toolguard  # noqa: E402
+from core.datasource import read_frame  # noqa: E402
 
 toolguard.install(
     mcp
@@ -218,6 +219,7 @@ def _reference_frame(pkl_path: str, bundle: dict) -> tuple[pd.DataFrame | None, 
     training fold beside the .pkl for exactly this (and for drift), so the
     honest reference is the data the model was actually fitted on."""
     candidates = [
+        Path(pkl_path).with_suffix(".reference.parquet"),
         Path(pkl_path).with_suffix(".reference.csv"),
         (
             Path((bundle.get("monitoring") or {}).get("reference_path", ""))
@@ -235,7 +237,7 @@ def _reference_frame(pkl_path: str, bundle: dict) -> tuple[pd.DataFrame | None, 
             pass
     for path in candidates:
         if path and str(path) and path.exists():
-            df = pd.read_csv(path)
+            df = read_frame(path)
             target = bundle.get("target") or bundle.get("label_column")
             if target and target in df.columns:
                 df = df.drop(columns=[target])

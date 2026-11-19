@@ -135,7 +135,7 @@ def check_model(value: str) -> Path:
 
 
 def _model_of(csv: Path) -> Path | None:
-    for suffix in (".reference.csv", "_forecast.csv", ".monitoring.json"):
+    for suffix in (".reference.csv", ".reference.parquet", "_forecast.csv", ".monitoring.json"):
         if csv.name.endswith(suffix):
             return csv.with_name(csv.name[: -len(suffix)] + ".pkl")
     return None

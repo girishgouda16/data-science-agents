@@ -13,7 +13,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from core import runtime, toolguard
-from core.datasource import read_table
+from core.datasource import read_table, storage_format, write_frame
 from pipeline_transformers import RunFolds
 import shap
 from run_persistence import save_training_run
@@ -934,8 +934,9 @@ def export_model(run_id: str, out_path: str = "", force: bool = False) -> str:
     # drift from "some column moved" into "something the model depends on
     # moved", which is the only version worth alerting on.
     train_fold, _, _ = _load_split(run_id)
-    reference_path = str(Path(out_path).with_suffix(".reference.csv"))
-    train_fold.to_csv(reference_path, index=False)
+    # Same format as the run's own storage: Parquet in, Parquet snapshot.
+    reference_path = str(Path(out_path).with_suffix(f".reference.{meta.get('storage_format', 'csv')}"))
+    write_frame(train_fold, reference_path)
     explain = meta.get("explain") or {}
     feature_columns = [
         c
@@ -1088,7 +1089,7 @@ def predict(pkl_path: str, data_path: str) -> str:
     # dataset, with a user bound) in that user's predictions folder. The
     # tool guard skips outputs a tool names itself, so this one is checked here.
     stem = data_file.name.split(".")[0] or "data"
-    out_file = data_file.with_name(f"{stem}_predictions.csv")
+    out_file = data_file.with_name(f"{stem}_predictions.{storage_format(data_file)}")
     if runtime.user():
         try:
             toolguard.check_output(str(out_file), "predict")
@@ -1096,7 +1097,7 @@ def predict(pkl_path: str, data_path: str) -> str:
             out_file = toolguard.data_dir() / "predictions" / toolguard.user_folder(runtime.user()) / out_file.name
             toolguard.check_output(str(out_file), "predict")
     out_path = str(out_file)
-    out.to_csv(out_path, index=False)
+    write_frame(out, out_path)
     result = {
         "model": bundle["model"],
         "n_rows": len(out),
@@ -1109,7 +1110,9 @@ def predict(pkl_path: str, data_path: str) -> str:
         "class_counts": {
             str(k): int(v) for k, v in out["prediction"].value_counts().items()
         },
-        "preview": out.head(5).to_dict(orient="records"),
+        # pandas' own encoder: Parquet input carries Timestamps and pd.NA,
+        # which json.dumps cannot serialise.
+        "preview": json.loads(out.head(5).to_json(orient="records", date_format="iso")),
     }
     return json.dumps(result, default=_to_native)
 
@@ -1157,7 +1160,7 @@ def run_standard_diagnostics(run_id: str) -> str:
     calibration = run("check_calibration", check_calibration, run_id)
     if calibration.get("miscalibration_warning"):
         # Isotonic overfits small folds (calibrate_model warns below 1000 rows).
-        n_train = len(pd.read_csv(_run_dir(run_id) / "train.csv", usecols=[0]))
+        n_train = len(_load_split(run_id)[0])
         run(
             "calibrate_model",
             calibrate_model,

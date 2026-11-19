@@ -114,3 +114,49 @@ def test_ece_noise_floor_covers_a_perfect_model_on_small_data():
     y = (rng.random(700) < proba).astype(int)  # perfectly calibrated by construction
     assert _ece(y, proba, 10)[0] <= max(ECE_CONCERN, _ece_noise_floor(proba, 10))
     assert _ece_noise_floor(rng.beta(1, 2, 50_000), 10) < ECE_CONCERN  # big data: 0.05 is the bar
+
+
+def test_parquet_input_keeps_parquet_storage_end_to_end():
+    """Parquet in: the run's folds, the exported reference snapshot and the
+    predictions are Parquet; the chain still runs on Parquet's own types
+    (datetime, category, nullable ints, leading-zero codes). CSV in: CSV."""
+    rng = np.random.default_rng(5)
+    n = 400
+    df = pd.DataFrame({
+        "zip": [f"{z:05d}" for z in rng.integers(0, 900, n)],  # leading zeros a CSV would lose
+        "plan": pd.Categorical(rng.choice(["pre", "post"], n)),
+        "calls": pd.array(np.where(rng.random(n) < 0.1, None, rng.integers(0, 20, n)), dtype="Int64"),
+        "joined": pd.Timestamp("2024-01-01") + pd.to_timedelta(rng.integers(0, 500, n), "D"),
+        "amount": rng.normal(50, 10, n),
+    })
+    df["label"] = np.where(df["amount"] + rng.normal(0, 5, n) > 55, "churn", "stay")
+    work = Path(_tempfile.mkdtemp())
+    src = work / "data.parquet"
+    df.to_parquet(src, index=False)
+
+    run_id = json.loads(m.prepare_dataset(str(src), "label"))["run_id"]
+    run = m._run_dir(run_id)
+    assert (run / "train.parquet").exists() and not (run / "train.csv").exists()
+    train, _, meta = m._load_split(run_id)
+    assert meta["storage_format"] == "parquet" and train["zip"].str.len().eq(5).all()
+
+    assert "error" not in json.loads(m.apply_datetime_features(run_id, "joined"))
+    imp = json.loads(m.propose_imputation(run_id))["proposals"]
+    assert "error" not in json.loads(m.apply_imputation(run_id, json.dumps({c: p["suggested_strategy"] for c, p in imp.items()})))
+    assert (run / "test.parquet").exists() and not (run / "test.csv").exists()
+    assert "error" not in json.loads(m.train_model(run_id, "random_forest"))
+
+    out = work / "model.pkl"
+    exported = json.loads(m.export_model(run_id, str(out), force=True))
+    assert exported["monitoring_reference"].endswith(".reference.parquet"), exported
+    new = work / "new.parquet"
+    df.drop(columns=["label"]).head(30).to_parquet(new, index=False)
+    scored = json.loads(m.predict(str(out), str(new)))
+    assert scored["out_path"].endswith("_predictions.parquet") and scored["n_rows"] == 30, scored
+    assert len(pd.read_parquet(scored["out_path"])) == 30
+
+    csv_src = work / "data.csv"
+    df.to_csv(csv_src, index=False)
+    csv_run = json.loads(m.prepare_dataset(str(csv_src), "label"))["run_id"]
+    assert (m._run_dir(csv_run) / "train.csv").exists()
+    assert m._load_meta(csv_run)["storage_format"] == "csv"
